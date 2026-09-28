@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.2
+
+- **Brand-aware search**: multi-word queries like "mjölk skånemejeri" now
+  probe each token as a brand (via manufacturer match) and rank that brand's
+  products first, with the other search words prioritized in the brand pass
+- **Search pagination**: server returns page/pages/total; panel shows
+  Föregående/Nästa with "Sida X av Y · N träffar"
+- **Reor pagination**: page through all current campaigns (25 per page),
+  not just the top 25
+
 ## 0.2.1
 
 - Fix removing watchlist entries (and item/staple edits) for keys with

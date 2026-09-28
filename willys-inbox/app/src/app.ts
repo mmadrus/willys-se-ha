@@ -43,6 +43,14 @@ export interface SearchHit {
   image?: string | null;
 }
 
+export interface SearchResponse {
+  results: SearchHit[];
+  page: number;
+  pages: number;
+  total: number;
+  brandName?: string;
+}
+
 export class WillysApp {
   readonly storage: Storage;
   readonly session: WillysSession;
@@ -490,21 +498,93 @@ export class WillysApp {
 
   // ----------------------------------------------------------------- panel
 
-  async searchProducts(query: string): Promise<SearchHit[]> {
+  async searchProducts(query: string, page = 0, size = 24): Promise<SearchResponse> {
     await this.session.ensureLoggedIn();
-    const res = await this.session.search(query, 0, 20);
-    return (res.results ?? []).map((p) => ({
+    const res = await this.session.search(query, page, size);
+    const total = res.pagination?.totalNumberOfResults ?? res.results?.length ?? 0;
+    const pages = Math.max(1, Math.ceil(total / size));
+    let results: SearchHit[] = (res.results ?? []).map((p) => this.toSearchHit(p));
+    let brandName: string | undefined;
+
+    // Brand refinement (first page only): Solr OR-matches brand words but
+    // ranks them poorly ("mjölk skånemejeri" -> Garant first). Probe each
+    // token as a standalone search; if its products share a manufacturer
+    // containing the token, it's a brand -> rank those products first.
+    if (page === 0) {
+      const tokens = [...new Set(
+        query.split(/\s+/).map((t) => normalizeItem(t)).filter((t) => t.length >= 4),
+      )];
+      if (tokens.length >= 2) {
+        const topManufacturers = (res.results ?? [])
+          .slice(0, 10)
+          .map((p) => normalizeItem(String((p as { manufacturer?: string }).manufacturer ?? "")))
+          .join(" ");
+        for (const token of tokens) {
+          if (topManufacturers.includes(token)) continue; // brand already ranked
+          try {
+            const probe = await this.session.search(token, 0, 40);
+            const hits = (probe.results ?? []).filter((p) =>
+              normalizeItem(String((p as { manufacturer?: string }).manufacturer ?? "")).includes(token),
+            );
+            if (hits.length === 0) continue;
+            // Majority vote: pick the most common matching manufacturer
+            const counts = new Map<string, number>();
+            for (const p of hits) {
+              const man = String((p as { manufacturer?: string }).manufacturer ?? "").trim();
+              if (man && normalizeItem(man).includes(token)) {
+                counts.set(man, (counts.get(man) ?? 0) + 1);
+              }
+            }
+            const brand = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? token;
+            brandName = brand;
+            const otherTokens = tokens.filter((t) => t !== token);
+            const seen = new Set(results.map((r) => r.code));
+            const fresh = hits
+              .filter((p) => String((p as { manufacturer?: string }).manufacturer ?? "").trim() === brand)
+              .map((p) => this.toSearchHit(p))
+              .filter((r) => !seen.has(r.code));
+            const nameMatches = fresh.filter((r) =>
+              otherTokens.every((t) => normalizeItem(r.name).includes(t)),
+            );
+            const rest = fresh.filter((r) => !nameMatches.includes(r));
+            results = [...nameMatches, ...rest, ...results];
+            break; // one brand pass is enough
+          } catch (e) {
+            LOG.warn(`brand probe '${token}' failed: ${e instanceof Error ? e.message : e}`);
+          }
+        }
+      }
+    }
+
+    return { results, page, pages, total, brandName };
+  }
+
+  private toSearchHit(p: {
+    code: string;
+    name: string;
+    priceValue: number;
+    displayVolume?: string;
+    savingsAmount?: string | number | null;
+    labels?: string[];
+    outOfStock?: boolean;
+    productBasketType?: { code?: string };
+    image?: { url: string } | null;
+    thumbnail?: { url: string } | null;
+    manufacturer?: string;
+  }): SearchHit {
+    const savings = Number(p.savingsAmount ?? 0) || 0;
+    return {
       code: p.code,
       name: p.name,
       price: p.priceValue,
       unit: p.displayVolume ?? "",
-      savings: Number(p.savingsAmount ?? 0) || 0,
-      percentOff: 0,
+      savings,
+      percentOff: savings > 0 ? Math.round((savings / (p.priceValue + savings)) * 100) : 0,
       labels: p.labels ?? [],
-      outOfStock: p.outOfStock,
-      basketType: (p as { productBasketType?: { code?: string } }).productBasketType?.code,
+      outOfStock: Boolean(p.outOfStock),
+      basketType: p.productBasketType?.code,
       image: p.image?.url ?? p.thumbnail?.url ?? null,
-    }));
+    };
   }
 
   addFromSearch(payload: {

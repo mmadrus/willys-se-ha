@@ -59,13 +59,14 @@ export const api = {
     req<{ ok: boolean; model: string; latencyMs: number; error?: string }>("POST", "api/ai/test"),
   aiAdd: (text: string) =>
     req<{ added: Array<{ key: string; name: string; qty: number }> }>("POST", "api/ai/add", { text }),
-  search: (q: string, signal?: AbortSignal) =>
-    req<{ results: import("./types").SearchHit[] }>(
-      "GET",
-      `api/search?q=${encodeURIComponent(q)}`,
-      undefined,
-      signal,
-    ),
+  search: (q: string, page = 0, signal?: AbortSignal) =>
+    req<{
+      results: import("./types").SearchHit[];
+      page: number;
+      pages: number;
+      total: number;
+      brandName?: string;
+    }>("GET", `api/search?q=${encodeURIComponent(q)}&page=${page}&size=25`, undefined, signal),
   addItem: (payload: import("./types").AddItemPayload) =>
     req<{ key: string; aisle: string }>("POST", "api/items", payload),
   patchItem: (key: string, patch: ItemPatch) =>

@@ -162,15 +162,23 @@ const DEBOUNCE_MS = 300;
 export function SearchTab({ state, reload, notify }: TabProps): JSX.Element {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<SearchHit[]>([]);
+  const [page, setPage] = useState(0);
+  const [pages, setPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [brandName, setBrandName] = useState("");
   const [busy, setBusy] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const [selectedAisle, setSelectedAisle] = useState<string>("");
+  const gridRef = useRef<HTMLDivElement | null>(null);
 
-  // Live search with debounce
+  // Live search with debounce; page resets when the query changes
   useEffect(() => {
     const term = q.trim();
     if (term.length < 2) {
       setResults([]);
+      setPages(1);
+      setTotal(0);
+      setBrandName("");
       setBusy(false);
       return;
     }
@@ -180,8 +188,13 @@ export function SearchTab({ state, reload, notify }: TabProps): JSX.Element {
       const ac = new AbortController();
       abortRef.current = ac;
       api
-        .search(term, ac.signal)
-        .then((d) => setResults((d.results ?? []).slice(0, 25)))
+        .search(term, page, ac.signal)
+        .then((d) => {
+          setResults(d.results ?? []);
+          setPages(Math.max(1, d.pages ?? 1));
+          setTotal(d.total ?? 0);
+          setBrandName(d.brandName ?? "");
+        })
         .catch((err: Error) => {
           if (err.name !== "AbortError") notify(`Sök fel: ${err.message}`);
         })
@@ -190,7 +203,12 @@ export function SearchTab({ state, reload, notify }: TabProps): JSX.Element {
         });
     }, DEBOUNCE_MS);
     return () => clearTimeout(t);
-  }, [q]);
+  }, [q, page]);
+
+  const changePage = (p: number): void => {
+    setPage(p);
+    gridRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
@@ -214,7 +232,7 @@ export function SearchTab({ state, reload, notify }: TabProps): JSX.Element {
   return html`
     <form class="searchbar" onSubmit=${(e: Event) => e.preventDefault()}>
       <input class="big" type="search" placeholder="Sök i Willys sortiment (söker direkt) …"
-             value=${q} onInput=${(e: Event) => setQ((e.target as HTMLInputElement).value)} />
+             value=${q} onInput=${(e: Event) => { setQ((e.target as HTMLInputElement).value); setPage(0); }} />
       ${busy && html`<span class="muted">söker …</span>`}
     </form>
     <div class="card" style="padding:8px 12px">
@@ -226,19 +244,29 @@ export function SearchTab({ state, reload, notify }: TabProps): JSX.Element {
         </select>
       </div>
     </div>
-    <${ProductGrid}>
-      ${results.map((r) => html`
-        <${ProductCard}
-          key=${r.code}
-          product=${{ code: r.code, name: r.name, price: r.price, unit: r.unit, savings: r.savings, percentOff: r.percentOff, labels: r.labels, image: r.image }}
-          onAdd=${() => add(r)}
-          extraActions=${html`
-            <button class="btn small" onClick=${() => add(r, { asStaple: true })}>Standard</button>
-            <button class="btn small ghost" onClick=${() => add(r, { watch: true })}>Bevaka</button>
-          `}
-        />
-      `)}
-    <//>
+    <div ref=${gridRef}>
+      ${brandName && html`<div class="aislehead">Varumärke: ${brandName}</div>`}
+      <${ProductGrid}>
+        ${results.map((r) => html`
+          <${ProductCard}
+            key=${r.code}
+            product=${{ code: r.code, name: r.name, price: r.price, unit: r.unit, savings: r.savings, percentOff: r.percentOff, labels: r.labels, image: r.image }}
+            onAdd=${() => add(r)}
+            extraActions=${html`
+              <button class="btn small" onClick=${() => add(r, { asStaple: true })}>Standard</button>
+              <button class="btn small ghost" onClick=${() => add(r, { watch: true })}>Bevaka</button>
+            `}
+          />
+        `)}
+      <//>
+    </div>
+    ${total > 0 && html`
+      <div class="pager">
+        <button class="btn small" disabled=${page <= 0} onClick=${() => changePage(page - 1)}>← Föregående</button>
+        <span class="muted">Sida ${page + 1} av ${pages} · ${total} träffar</span>
+        <button class="btn small" disabled=${page >= pages - 1} onClick=${() => changePage(page + 1)}>Nästa →</button>
+      </div>
+    `}
     ${q.trim().length >= 2 && !busy && !results.length && html`<div class="empty">Inga träffar för "${q}".</div>`}
     ${q.trim().length < 2 && html`<div class="empty">Skriv minst två bokstäver – resultaten visas direkt.</div>`}
   `;
@@ -369,8 +397,19 @@ export function AislesTab({ state, reload, notify }: TabProps): JSX.Element {
 
 /* -------------------------------------------------------------- Reor tab */
 
+const DEALS_PAGE_SIZE = 25;
+
 export function DealsTab({ state, reload, notify }: TabProps): JSX.Element {
-  const deals = (state.deals ?? []).slice(0, 25); // 5x5
+  const deals = state.deals ?? [];
+  const [page, setPage] = useState(0);
+  const pages = Math.max(1, Math.ceil(deals.length / DEALS_PAGE_SIZE));
+  const current = Math.min(page, pages - 1);
+  const slice = deals.slice(current * DEALS_PAGE_SIZE, (current + 1) * DEALS_PAGE_SIZE);
+
+  const changePage = (p: number): void => {
+    setPage(Math.min(pages - 1, Math.max(0, p)));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const watch = (d: { name: string; code: string }): void => {
     void api
@@ -384,7 +423,7 @@ export function DealsTab({ state, reload, notify }: TabProps): JSX.Element {
 
   return html`
     <${ProductGrid}>
-      ${deals.map((d: import("./types").DealItem) => html`
+      ${slice.map((d: import("./types").DealItem) => html`
         <${ProductCard}
           key=${d.code}
           product=${{ code: d.code, name: d.name, price: d.price, unit: d.unit, savings: d.savings, percentOff: d.percentOff, labels: d.labels, image: d.image, comparePrice: d.comparePrice }}
@@ -392,8 +431,14 @@ export function DealsTab({ state, reload, notify }: TabProps): JSX.Element {
         />
       `)}
     <//>
+    ${deals.length > DEALS_PAGE_SIZE && html`
+      <div class="pager">
+        <button class="btn small" disabled=${current <= 0} onClick=${() => changePage(current - 1)}>← Föregående</button>
+        <span class="muted">Sida ${current + 1} av ${pages} · ${deals.length} reor</span>
+        <button class="btn small" disabled=${current >= pages - 1} onClick=${() => changePage(current + 1)}>Nästa →</button>
+      </div>
+    `}
     ${!deals.length && html`<div class="empty">Inga reor hämtade än – tryck "Uppdatera reor" under Inställningar.</div>`}
-    ${deals.length > 0 && html`<div class="empty" style="padding:10px">Visar ${deals.length} av reorna, rankat på rabatt i procent.</div>`}
   `;
 }
 

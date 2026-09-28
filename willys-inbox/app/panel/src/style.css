@@ -123,6 +123,12 @@ table.grid select, table.grid input[type="text"] { font-size: 13px; padding: 5px
 /* unified item row (Varor tab) */
 .irow .row > select { max-width: 170px; }
 
+/* pagination */
+.pager {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  padding: 14px 0 4px; flex-wrap: wrap;
+}
+
 /* ------------------------------------------------- product grid (Reor/Sök) */
 
 .pgrid {

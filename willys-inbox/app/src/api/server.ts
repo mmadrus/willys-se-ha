@@ -216,7 +216,7 @@ route("GET", "/api/state", async (_req, res) => {
     deals: (s.dealCache?.items ?? [])
       .filter((d) => !d.outOfStock && d.percentOff > 0)
       .sort((a, b) => b.percentOff - a.percentOff)
-      .slice(0, 40),
+      .slice(0, 500),
     dealsUpdated: s.dealCache?.fetchedAt ?? null,
     lastComposeAt: s.lastComposeAt,
     storeId: app.session.currentStoreId,
@@ -239,9 +239,11 @@ route("GET", "/api/list", async (_req, res) => {
 
 route("GET", "/api/search", async (req, res, search) => {
   const q = search.get("q")?.trim();
-  if (!q) return ok(res, { results: [] });
-  const results = await currentApp.searchProducts(q);
-  ok(res, { results });
+  if (!q) return ok(res, { results: [], page: 0, pages: 0, total: 0 });
+  const page = Math.max(0, Number.parseInt(search.get("page") ?? "0", 10) || 0);
+  const size = Math.min(48, Math.max(6, Number.parseInt(search.get("size") ?? "24", 10) || 24));
+  const results = await currentApp.searchProducts(q, page, size);
+  ok(res, results);
 });
 
 route("POST", "/api/items", async (req, res) => {
