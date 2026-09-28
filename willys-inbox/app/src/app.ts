@@ -13,13 +13,17 @@ import { matchWatchlist } from "./engine/deals.js";
 import { normalizeItem } from "./util.js";
 import { log } from "./log.js";
 import {
+  AI_PROVIDERS,
   aiConfigured,
   aiTest,
+  effectiveAi,
   loadAiConfig,
   matchPurchaseKey,
   nlParseItems,
   saveAiConfig,
+  isAiProvider,
   type AiConfig,
+  type AiProvider,
 } from "./ai/llm.js";
 
 const LOG = log.child("app");
@@ -340,19 +344,47 @@ export class WillysApp {
 
   // --------------------------------------------------------------- ai
 
-  getAiConfig(): { configured: boolean; baseUrl: string; model: string; apiKeyHint: string } {
+  getAiConfig(): {
+    configured: boolean;
+    provider: AiProvider;
+    providers: Array<{ id: AiProvider; label: string; baseUrl: string; defaultModel: string }>;
+    baseUrl: string;
+    model: string;
+    apiKeyHint: string;
+  } {
     const hint = this.ai.apiKey
       ? `${this.ai.apiKey.slice(0, 3)}…${this.ai.apiKey.slice(-4)}`
       : "";
-    return { configured: aiConfigured(this.ai), baseUrl: this.ai.baseUrl, model: this.ai.model, apiKeyHint: hint };
+    const eff = effectiveAi(this.ai);
+    return {
+      configured: aiConfigured(this.ai),
+      provider: this.ai.provider,
+      providers: Object.values(AI_PROVIDERS).map((p) => ({
+        id: p.id,
+        label: p.label,
+        baseUrl: p.baseUrl,
+        defaultModel: p.defaultModel,
+      })),
+      baseUrl: eff.baseUrl,
+      model: eff.model,
+      apiKeyHint: hint,
+    };
   }
 
-  setAiConfig(patch: { apiKey?: string; baseUrl?: string; model?: string }): void {
+  setAiConfig(patch: { provider?: string; apiKey?: string; baseUrl?: string; model?: string }): void {
+    if (typeof patch.provider === "string" && isAiProvider(patch.provider)) {
+      // Switching provider resets base/model so the new preset applies
+      if (patch.provider !== this.ai.provider) {
+        this.ai.baseUrl = "";
+        this.ai.model = "";
+      }
+      this.ai.provider = patch.provider;
+    }
     if (typeof patch.apiKey === "string") this.ai.apiKey = patch.apiKey.trim();
-    if (typeof patch.baseUrl === "string" && patch.baseUrl.trim()) this.ai.baseUrl = patch.baseUrl.trim().replace(/\/+$/, "");
-    if (typeof patch.model === "string" && patch.model.trim()) this.ai.model = patch.model.trim();
+    if (typeof patch.baseUrl === "string") this.ai.baseUrl = patch.baseUrl.trim().replace(/\/+$/, "");
+    if (typeof patch.model === "string") this.ai.model = patch.model.trim();
     saveAiConfig(this.cfg.dataDir, this.ai);
-    LOG.info(`AI config updated (model=${this.ai.model}, configured=${aiConfigured(this.ai)})`);
+    LOG.info(`AI config updated (provider=${this.ai.provider}, model=${effectiveAi(this.ai).model}, configured=${aiConfigured(this.ai)})`);
   }
 
   async aiTest(): Promise<{ ok: boolean; model: string; latencyMs: number; error?: string }> {

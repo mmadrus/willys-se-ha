@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { WillysApp } from "../app.js";
 import type { AppConfig } from "../config.js";
 import { log } from "../log.js";
-import { fetchWithTimeout } from "../util.js";
+import { fetchWithTimeout, normalizeItem } from "../util.js";
 import { aiConfigured } from "../ai/llm.js";
 
 const LOG = log.child("api");
@@ -107,8 +107,14 @@ export async function handleApi(
     if (r.method !== req.method) continue;
     const m = path.match(r.prefix);
     if (m) {
-      // expose params via symbol-keyed bag
-      (req as IncomingMessage & { routeParams?: string[] }).routeParams = m.slice(1);
+      // expose params via symbol-keyed bag (URL-decoded)
+      (req as IncomingMessage & { routeParams?: string[] }).routeParams = m.slice(1).map((p) => {
+        try {
+          return decodeURIComponent(p);
+        } catch {
+          return p;
+        }
+      });
       await r.handler(req, res, search);
       return;
     }
@@ -255,7 +261,7 @@ route("POST", "/api/items", async (req, res) => {
 });
 
 route("PATCH", "/api/items/:key", async (req, res) => {
-  const key = params(req)[0];
+  const key = normalizeItem(params(req)[0]);
   const b = await body(req);
   const s = currentApp.storage.data.items[key];
   if (!s) return json(res, 404, { error: "no such item" });
@@ -284,12 +290,12 @@ route("PATCH", "/api/items/:key", async (req, res) => {
 });
 
 route("DELETE", "/api/items/:key", async (req, res) => {
-  currentApp.storage.deleteItem(params(req)[0]);
+  currentApp.storage.deleteItem(normalizeItem(params(req)[0]));
   ok(res);
 });
 
 route("POST", "/api/staples/:key", async (req, res) => {
-  const key = params(req)[0];
+  const key = normalizeItem(params(req)[0]);
   const b = await body(req);
   currentApp.storage.update((s) => {
     const prev = s.staples[key];
@@ -304,7 +310,7 @@ route("POST", "/api/staples/:key", async (req, res) => {
 });
 
 route("DELETE", "/api/staples/:key", async (req, res) => {
-  const key = params(req)[0];
+  const key = normalizeItem(params(req)[0]);
   currentApp.storage.update((s) => {
     delete s.staples[key];
   });
@@ -312,7 +318,7 @@ route("DELETE", "/api/staples/:key", async (req, res) => {
 });
 
 route("POST", "/api/watchlist/:key", async (req, res) => {
-  const key = params(req)[0];
+  const key = normalizeItem(params(req)[0]);
   currentApp.storage.update((s) => {
     s.watchlist[key] = { key };
   });
@@ -320,7 +326,7 @@ route("POST", "/api/watchlist/:key", async (req, res) => {
 });
 
 route("DELETE", "/api/watchlist/:key", async (req, res) => {
-  const key = params(req)[0];
+  const key = normalizeItem(params(req)[0]);
   currentApp.storage.update((s) => {
     delete s.watchlist[key];
   });
@@ -400,6 +406,7 @@ route("GET", "/api/ai/config", async (_req, res) => {
 route("POST", "/api/ai/config", async (req, res) => {
   const b = await body(req);
   currentApp.setAiConfig({
+    provider: typeof b.provider === "string" ? b.provider : undefined,
     apiKey: typeof b.apiKey === "string" ? b.apiKey : undefined,
     baseUrl: typeof b.baseUrl === "string" ? b.baseUrl : undefined,
     model: typeof b.model === "string" ? b.model : undefined,

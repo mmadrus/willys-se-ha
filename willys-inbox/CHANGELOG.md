@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.1
+
+- Fix removing watchlist entries (and item/staple edits) for keys with
+  spaces/special characters: route params are now URL-decoded and
+  normalized server-side
+- "Bevaka" is a text button with active state everywhere (no emoji), and
+  removal from Varor asks for confirmation
+- Unified UI: Varor rows are cards like every other tab; consistent
+  buttons/toggles across tabs
+- Multi-provider AI: OpenCode Zen, OpenAI, Anthropic (native API),
+  Google Gemini, OpenRouter, or any OpenAI-compatible server; provider
+  presets fill base URL and default model
+
 ## 0.2.0
 
 - **Willys theme**: white + Willys red as base colors, light/dark mode, and

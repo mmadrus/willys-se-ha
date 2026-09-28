@@ -53,14 +53,8 @@ export const api = {
   state: () => req("GET", "api/state"),
   debug: () => req<import("./types").DebugInfo>("GET", "api/debug"),
   list: () => req<{ items: import("./types").TodoItem[] }>("GET", "api/list"),
-  aiConfig: () =>
-    req<{ configured: boolean; baseUrl: string; model: string; apiKeyHint: string }>("GET", "api/ai/config"),
-  saveAiConfig: (patch: { apiKey?: string; baseUrl?: string; model?: string }) =>
-    req<{ configured: boolean; baseUrl: string; model: string; apiKeyHint: string }>(
-      "POST",
-      "api/ai/config",
-      patch,
-    ),
+  aiConfig: () => req<import("./types").AiConfigInfo>("GET", "api/ai/config"),
+  saveAiConfig: (patch: import("./types").AiConfigPatch) => req<import("./types").AiConfigInfo>("POST", "api/ai/config", patch),
   aiTest: () =>
     req<{ ok: boolean; model: string; latencyMs: number; error?: string }>("POST", "api/ai/test"),
   aiAdd: (text: string) =>

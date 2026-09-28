@@ -68,6 +68,8 @@ h3 { font-size: 14px; margin: 14px 0 6px; }
 .btn.small { padding: 4px 9px; font-size: 12px; }
 .btn.danger { color: var(--accent); }
 .btn.ghost { background: transparent; }
+.btn.toggled { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.btn:disabled { opacity: 0.55; cursor: default; }
 
 input[type="text"], input[type="search"], input[type="password"], select {
   background: var(--bg); color: var(--fg); border: 1px solid var(--border);
@@ -117,6 +119,9 @@ table.grid td { padding: 6px 4px; border-bottom: 1px solid var(--border); vertic
 table.grid select, table.grid input[type="text"] { font-size: 13px; padding: 5px 7px; }
 
 .arrow-btns { display: flex; gap: 3px; }
+
+/* unified item row (Varor tab) */
+.irow .row > select { max-width: 170px; }
 
 /* ------------------------------------------------- product grid (Reor/Sök) */
 

@@ -115,6 +115,31 @@ export interface StoreInfo {
 
 export type DebugInfo = Record<string, unknown>;
 
+export type AiProviderId = "opencode" | "openai" | "anthropic" | "google" | "openrouter" | "custom";
+
+export interface AiProviderInfo {
+  id: AiProviderId;
+  label: string;
+  baseUrl: string;
+  defaultModel: string;
+}
+
+export interface AiConfigInfo {
+  configured: boolean;
+  provider: AiProviderId;
+  providers: AiProviderInfo[];
+  baseUrl: string;
+  model: string;
+  apiKeyHint: string;
+}
+
+export interface AiConfigPatch {
+  provider?: string;
+  apiKey?: string;
+  baseUrl?: string;
+  model?: string;
+}
+
 export interface AddItemPayload {
   name: string;
   code?: string;

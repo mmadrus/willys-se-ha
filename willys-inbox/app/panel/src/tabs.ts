@@ -234,7 +234,7 @@ export function SearchTab({ state, reload, notify }: TabProps): JSX.Element {
           onAdd=${() => add(r)}
           extraActions=${html`
             <button class="btn small" onClick=${() => add(r, { asStaple: true })}>Standard</button>
-            <button class="btn small ghost" onClick=${() => add(r, { watch: true })}>👁</button>
+            <button class="btn small ghost" onClick=${() => add(r, { watch: true })}>Bevaka</button>
           `}
         />
       `)}
@@ -263,48 +263,56 @@ export function ItemsTab({ state, reload }: TabProps): JSX.Element {
   const watchKeys = new Set(state.watchlist);
 
   return html`
-    <table class="grid">
-      <tbody>
-        ${items.map((i) => {
-          const st = predByKey.get(i.key);
-          return html`
-            <tr key=${i.key}>
-              <td class="grow">
-                <b>${i.name}</b>
-                <div class="muted">
-                  ${st?.suggestionsCount ? html`Köpt ${st.suggestionsCount}x` : "Ingen historik"}
-                </div>
-              </td>
-              <td>
-                <select value=${i.aisle} onChange=${(e: Event) => patch(i.key, { aisle: (e.target as HTMLSelectElement).value })}>
-                  ${aisles.map((a) => html`<option key=${a.id} value=${a.id}>${a.name}</option>`)}
-                </select>
-              </td>
-              <td>
-                <select value=${st?.mode ?? "suggest"} onChange=${(e: Event) => patch(i.key, { mode: (e.target as HTMLSelectElement).value as "suggest" | "auto" | "never" })}>
-                  <option value="suggest">Föreslå</option>
-                  <option value="auto">Auto</option>
-                  <option value="never">Aldrig</option>
-                </select>
-              </td>
-              <td>
-                ${stapleKeys.has(i.key)
-                  ? html`<button class="btn small" onClick=${() => void api.unsetStaple(i.key).then(reload)}>✓ Standard</button>`
-                  : html`<button class="btn small ghost" onClick=${() => void api.setStaple(i.key, { active: true, qty: 1 }).then(reload)}>Standard</button>`}
-              </td>
-              <td>
-                ${watchKeys.has(i.key)
-                  ? html`<button class="btn small" onClick=${() => void api.unwatch(i.key).then(reload)}>👁</button>`
-                  : html`<button class="btn small ghost" onClick=${() => void api.watch(i.key).then(reload)}>👁</button>`}
-              </td>
-              <td>
-                <button class="btn small danger" onClick=${() => void api.deleteItem(i.key).then(reload)}>✕</button>
-              </td>
-            </tr>
-          `;
-        })}
-      </tbody>
-    </table>
+    ${items.map((i) => {
+      const st = predByKey.get(i.key);
+      const aisle = aisles.find((a) => a.id === i.aisle);
+      return html`
+        <div class="card irow" key=${i.key}>
+          <div class="row">
+            <div class="grow">
+              <b>${i.name}</b>
+              <div class="muted">
+                ${aisle?.name ?? "Övrigt"} ·
+                ${st?.suggestionsCount
+                  ? `köpt ${st.suggestionsCount}x`
+                  : "ingen historik"}
+                ${st && ` · ${Math.round(st.confidence * 100)} % säker`}
+              </div>
+            </div>
+            <select value=${st?.mode ?? "suggest"} title="Hantering"
+                    onChange=${(e: Event) => patch(i.key, { mode: (e.target as HTMLSelectElement).value as "suggest" | "auto" | "never" })}>
+              <option value="suggest">Föreslå</option>
+              <option value="auto">Auto</option>
+              <option value="never">Aldrig</option>
+            </select>
+            <select value=${i.aisle} title="Avdelning"
+                    onChange=${(e: Event) => patch(i.key, { aisle: (e.target as HTMLSelectElement).value })}>
+              ${aisles.map((a) => html`<option key=${a.id} value=${a.id}>${a.name}</option>`)}
+            </select>
+          </div>
+          <div class="sug-actions">
+            <button class="btn small ${stapleKeys.has(i.key) ? "toggled" : ""}"
+                    onClick=${() => {
+                      const on = stapleKeys.has(i.key);
+                      const p = on ? api.unsetStaple(i.key) : api.setStaple(i.key, { active: true, qty: 1 });
+                      void p.then(reload);
+                    }}>
+              ${stapleKeys.has(i.key) ? "✓ Standard" : "Standard"}
+            </button>
+            <button class="btn small ${watchKeys.has(i.key) ? "toggled" : ""}"
+                    onClick=${() => {
+                      const p = watchKeys.has(i.key) ? api.unwatch(i.key) : api.watch(i.key);
+                      void p.then(reload);
+                    }}>
+              ${watchKeys.has(i.key) ? "✓ Bevakas" : "Bevaka"}
+            </button>
+            <button class="btn small danger" onClick=${() => { if (confirm(`Ta bort "${i.name}"?`)) void api.deleteItem(i.key).then(reload); }}>
+              Ta bort
+            </button>
+          </div>
+        </div>
+      `;
+    })}
     ${!items.length && html`<div class="empty">Inga varor än – sök och lägg till.</div>`}
   `;
 }
@@ -396,7 +404,8 @@ export function SettingsTab({ state, reload, notify }: TabProps): JSX.Element {
   const [storeFilter, setStoreFilter] = useState("");
   const [debug, setDebug] = useState<DebugInfo | null>(null);
   const [theme, setTheme] = useTheme();
-  const [ai, setAi] = useState<{ configured: boolean; baseUrl: string; model: string; apiKeyHint: string } | null>(null);
+  const [ai, setAi] = useState<import("./types").AiConfigInfo | null>(null);
+  const [aiProvider, setAiProvider] = useState<import("./types").AiProviderId | "">("");
   const [aiKey, setAiKey] = useState("");
   const [aiUrl, setAiUrl] = useState("");
   const [aiModel, setAiModel] = useState("");
@@ -407,8 +416,17 @@ export function SettingsTab({ state, reload, notify }: TabProps): JSX.Element {
       .stores()
       .then((d) => setStores(d.stores ?? []))
       .catch(() => undefined);
-    api.aiConfig().then((c) => setAi(c)).catch(() => undefined);
+    api
+      .aiConfig()
+      .then((c) => {
+        setAi(c);
+        setAiProvider(c.provider);
+      })
+      .catch(() => undefined);
   }, []);
+
+  const providerInfo = ai?.providers.find((p) => p.id === (aiProvider || ai?.provider));
+  const usingCustomUrl = aiProvider === "custom";
 
   const filtered = stores.filter(
     (s) => !storeFilter || s.name.toLowerCase().includes(storeFilter.toLowerCase()),
@@ -437,13 +455,17 @@ export function SettingsTab({ state, reload, notify }: TabProps): JSX.Element {
   const saveAi = async (): Promise<void> => {
     setAiBusy(true);
     try {
-      const patch: { apiKey?: string; baseUrl?: string; model?: string } = {};
+      const patch: import("./types").AiConfigPatch = {};
+      if (aiProvider) patch.provider = aiProvider;
       if (aiKey.trim()) patch.apiKey = aiKey.trim();
       if (aiUrl.trim()) patch.baseUrl = aiUrl.trim();
       if (aiModel.trim()) patch.model = aiModel.trim();
       const cfg = await api.saveAiConfig(patch);
       setAi(cfg);
+      setAiProvider(cfg.provider);
       setAiKey("");
+      setAiUrl("");
+      setAiModel("");
       notify("AI-inställningar sparade");
     } catch (e) {
       notify(`Fel: ${(e as Error).message}`);
@@ -481,19 +503,33 @@ export function SettingsTab({ state, reload, notify }: TabProps): JSX.Element {
     </div>
 
     <div class="card">
-      <h2>AI (OpenCode)</h2>
+      <h2>AI-assistent</h2>
       <div class="muted" style="margin-bottom:8px">
         ${ai?.configured
           ? html`Aktiv: <b>${ai.model}</b> via ${ai.baseUrl} (nyckel ${ai.apiKeyHint})`
-          : "Inte konfigurerad. Används för: smart matchning av incheckade varor, naturligt språk-lägg-till och framtida förslag."}
+          : "Inte konfigurerad. Används för: smart matchning av incheckade varor och naturligt språk-lägg-till."}
+      </div>
+      <div class="row" style="margin-bottom:8px">
+        <label class="muted">Leverantör:&nbsp;
+          <select value=${aiProvider || ai?.provider || "opencode"}
+                  onChange=${(e: Event) => setAiProvider((e.target as HTMLSelectElement).value as import("./types").AiProviderId)}>
+            ${(ai?.providers ?? []).map((p) => html`<option key=${p.id} value=${p.id}>${p.label}</option>`)}
+          </select>
+        </label>
       </div>
       <div class="row">
-        <input type="password" placeholder="OpenCode API-nyckel" style="flex:1 1 200px"
+        <input type="password" placeholder="API-nyckel" style="flex:1 1 200px"
                value=${aiKey} onInput=${(e: Event) => setAiKey((e.target as HTMLInputElement).value)} />
-        <input type="text" placeholder=${ai?.baseUrl ?? "https://opencode.ai/zen/v1"} style="flex:1 1 220px"
-               value=${aiUrl} onInput=${(e: Event) => setAiUrl((e.target as HTMLInputElement).value)} />
-        <input type="text" placeholder=${ai?.model ?? "gpt-5.4-nano"} style="flex:0 1 160px"
+        ${usingCustomUrl && html`
+          <input type="text" placeholder="Bas-URL (t.ex. http://localhost:11434/v1)" style="flex:1 1 220px"
+                 value=${aiUrl} onInput=${(e: Event) => setAiUrl((e.target as HTMLInputElement).value)} />
+        `}
+        <input type="text" placeholder=${providerInfo?.defaultModel || ai?.model || "modell-id"} style="flex:0 1 200px"
                value=${aiModel} onInput=${(e: Event) => setAiModel((e.target as HTMLInputElement).value)} />
+      </div>
+      <div class="muted" style="margin:6px 0 0">
+        ${providerInfo && !usingCustomUrl && html`Förval: ${providerInfo.baseUrl} · modell ${providerInfo.defaultModel}. Fält du lämnar tomma använder förvalen.`}
+        ${usingCustomUrl && "Ange bas-URL till en OpenAI-kompatibel server (…/v1) och modell-id."}
       </div>
       <div class="sug-actions">
         <button class="btn primary" disabled=${aiBusy} onClick=${() => void saveAi()}>Spara</button>
