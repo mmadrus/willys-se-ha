@@ -83,7 +83,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     watchlist: strList(opts, "deals_watchlist"),
     dataDir,
     ingressPort: num({ v: env.WILLYS_INGRESS_PORT }, "v", 8099),
-    supervisorToken: env.SUPERVISOR_TOKEN ?? "",
+    supervisorToken: env.SUPERVISOR_TOKEN ?? env.HASSIO_TOKEN ?? "",
     supervisorUrl: env.SUPERVISOR_URL ?? "http://supervisor",
     eventsPollSeconds: Math.max(5, num({ v: env.WILLYS_EVENTS_POLL }, "v", 20)),
   };

@@ -60,6 +60,7 @@ Each check-off on `todo.shopping_list` is recorded as a purchase for the matchin
 
 ## Troubleshooting
 
+- **401 Unauthorized / "Failed to get addon config from Supervisor API"** – the add-on's API permissions are snapshotted at install time by Supervisor. If it was installed before the API flags were in place (or after a repo restructure), uninstall the add-on, run **⋮ → Check for updates** in the Add-on Store, then reinstall and re-enter your options. The boot log line `supervisor token: present` confirms it's fixed.
 - **Login fails** – check personnummer (12 digits, no `-`) and password; Willys occasionally changes their login flow (the vendored client replicates their AES-encrypted login).
 - **No deals** – check `sensor.willys_inbox_status` attributes (`last_error`); the add-on logs the campaign path used at startup. Campaign slugs change around holidays; the fallback browses the `erbjudanden` category.
 - **Wrong store prices** – confirm the store with the panel's Inställningar tab; set `store_id` accordingly.

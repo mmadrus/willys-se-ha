@@ -42,7 +42,14 @@ export function createServer(app: WillysApp, port: number) {
       const ingressPath = (req.headers["x-ingress-path"] as string | undefined) ?? "";
       let url = req.url ?? "/";
       if (ingressPath && url.startsWith(ingressPath)) url = url.slice(ingressPath.length) || "/";
-      const parsed = new URL(url, "http://local");
+      let parsed: URL;
+      try {
+        parsed = new URL(url, "http://local");
+      } catch {
+        res.writeHead(400);
+        res.end("bad request");
+        return;
+      }
       const path = parsed.pathname;
 
       if (path.startsWith("/api/")) {

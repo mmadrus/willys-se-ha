@@ -111,6 +111,7 @@ export class HaEventsBridge {
   }
 
   private async getState(entityId: string): Promise<string | null> {
+    if (!this.supervisor.token) return null;
     try {
       const res = await fetch(`${this.supervisor.urlFor(`/core/api/states/${entityId}`)}`, {
         headers: { Authorization: `Bearer ${this.supervisor.token}` },

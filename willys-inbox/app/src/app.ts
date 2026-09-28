@@ -65,8 +65,11 @@ export class WillysApp {
     );
 
     // Initial supervisor connectivity check (non-fatal in dev mode)
+    LOG.info(
+      `supervisor token: ${this.cfg.supervisorToken ? `present (len ${this.cfg.supervisorToken.length})` : "MISSING - reinstall add-on to grant API access"}`,
+    );
     const ok = await this.supervisor.coreApiAvailable();
-    if (!ok) LOG.warn("supervisor core API not reachable (dev mode?) - sensors/notify disabled");
+    if (!ok) LOG.warn("supervisor core API not usable - sensors/notify disabled until fixed");
 
     setInterval(() => void this.publishAllSensors(), 5 * 60_000);
     setInterval(() => void this.runPredictorCycle(), 2 * 60 * 60_000);

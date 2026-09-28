@@ -19,10 +19,26 @@ export interface SensorUpdate {
  *   GET  /core/api                      - connectivity check
  */
 export class SupervisorBridge {
+  private warnedNoToken = false;
+
   constructor(private cfg: AppConfig) {}
 
   get token(): string {
     return this.cfg.supervisorToken;
+  }
+
+  /** True once we've determined the add-on has no usable API token. */
+  private checkToken(): boolean {
+    if (this.cfg.supervisorToken) return true;
+    if (!this.warnedNoToken) {
+      this.warnedNoToken = true;
+      LOG.error(
+        "no SUPERVISOR_TOKEN in environment - the add-on lacks API access. " +
+          "Fix: uninstall the add-on, 'Check for updates' in the Add-on Store, then reinstall " +
+          "(Supervisor snapshots API permissions at install time).",
+      );
+    }
+    return false;
   }
 
   urlFor(path: string): string {
@@ -45,6 +61,9 @@ export class SupervisorBridge {
       const res = await fetchWithTimeout(this.url("/core/api"), {
         headers: this.headers(),
       }, 5000);
+      if (!res.ok) {
+        LOG.warn(`core API check -> HTTP ${res.status}${res.status === 401 ? " (token rejected; reinstall the add-on to refresh API permissions)" : ""}`);
+      }
       return res.ok;
     } catch {
       return false;
@@ -52,6 +71,7 @@ export class SupervisorBridge {
   }
 
   async setState(entityId: string, update: SensorUpdate): Promise<void> {
+    if (!this.checkToken()) return;
     try {
       const res = await fetchWithTimeout(
         this.url(`/core/api/states/${entityId}`),
@@ -74,6 +94,7 @@ export class SupervisorBridge {
   }
 
   async callService(domainService: string, payload: Record<string, unknown>): Promise<boolean> {
+    if (!this.checkToken()) return false;
     const dot = domainService.indexOf(".");
     if (dot <= 0) {
       LOG.warn(`service "${domainService}" must be in domain.service form`);
