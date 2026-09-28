@@ -6,6 +6,7 @@ import type { WillysApp } from "../app.js";
 import type { AppConfig } from "../config.js";
 import { log } from "../log.js";
 import { fetchWithTimeout } from "../util.js";
+import { aiConfigured } from "../ai/llm.js";
 
 const LOG = log.child("api");
 
@@ -213,6 +214,7 @@ route("GET", "/api/state", async (_req, res) => {
     dealsUpdated: s.dealCache?.fetchedAt ?? null,
     lastComposeAt: s.lastComposeAt,
     storeId: app.session.currentStoreId,
+    aiConfigured: aiConfigured(app.ai),
     predictions: Object.values(s.stats)
       .map((st) => {
         const p = predict(st);
@@ -387,4 +389,36 @@ route("GET", "/api/stores", async (_req, res) => {
 route("POST", "/api/refresh", async (_req, res) => {
   await currentApp.refreshDealsJob();
   ok(res);
+});
+
+// ------------------------------------------------------------------- ai
+
+route("GET", "/api/ai/config", async (_req, res) => {
+  ok(res, currentApp.getAiConfig());
+});
+
+route("POST", "/api/ai/config", async (req, res) => {
+  const b = await body(req);
+  currentApp.setAiConfig({
+    apiKey: typeof b.apiKey === "string" ? b.apiKey : undefined,
+    baseUrl: typeof b.baseUrl === "string" ? b.baseUrl : undefined,
+    model: typeof b.model === "string" ? b.model : undefined,
+  });
+  ok(res, currentApp.getAiConfig());
+});
+
+route("POST", "/api/ai/test", async (_req, res) => {
+  ok(res, await currentApp.aiTest());
+});
+
+route("POST", "/api/ai/add", async (req, res) => {
+  const b = await body(req);
+  const text = String(b.text ?? "").trim();
+  if (!text) return json(res, 400, { error: "text required" });
+  try {
+    const added = await currentApp.aiAdd(text);
+    ok(res, { added });
+  } catch (e) {
+    json(res, 502, { error: e instanceof Error ? e.message : "ai add failed" });
+  }
 });

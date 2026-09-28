@@ -51,6 +51,7 @@ export class Storage {
         staples: raw.staples ?? {},
         watchlist: raw.watchlist ?? {},
         basketAisleHints: raw.basketAisleHints ?? {},
+        aiMatchCache: raw.aiMatchCache ?? {},
       });
     } catch (e) {
       log.error("storage: failed to load state, starting fresh", e);

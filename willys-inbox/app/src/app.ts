@@ -12,6 +12,15 @@ import { predict } from "./engine/predictor.js";
 import { matchWatchlist } from "./engine/deals.js";
 import { normalizeItem } from "./util.js";
 import { log } from "./log.js";
+import {
+  aiConfigured,
+  aiTest,
+  loadAiConfig,
+  matchPurchaseKey,
+  nlParseItems,
+  saveAiConfig,
+  type AiConfig,
+} from "./ai/llm.js";
 
 const LOG = log.child("app");
 const DECISION_ENTITY = "input_text.willys_decision";
@@ -27,6 +36,7 @@ export interface SearchHit {
   labels: string[];
   outOfStock: boolean;
   basketType?: string;
+  image?: string | null;
 }
 
 export class WillysApp {
@@ -38,6 +48,7 @@ export class WillysApp {
   private events: HaEventsBridge | null = null;
   private lastError = "";
   private todoEntity: string;
+  ai: AiConfig;
 
   constructor(readonly cfg: AppConfig) {
     this.storage = new Storage(cfg.dataDir);
@@ -46,6 +57,7 @@ export class WillysApp {
     this.shoppingList = new ShoppingListClient(cfg);
     this.sensors = new SensorPublisher(this.supervisor);
     this.todoEntity = "todo.shopping_list";
+    this.ai = loadAiConfig(cfg.dataDir);
   }
 
   async boot(): Promise<void> {
@@ -268,7 +280,17 @@ export class WillysApp {
   /** Called when a todo item is checked off = purchase happened. */
   handlePurchase(nameOrKey: string): void {
     const key = this.resolveKey(nameOrKey);
-    const name = this.storage.data.items[key]?.name ?? nameOrKey;
+    if (!this.storage.data.items[key]) {
+      // No registry hit: audit it and let the AI try to match it to a known item
+      this.storage.recordEvent({ at: Date.now(), kind: "purchase-unmatched", name: nameOrKey, source: "todo" });
+      this.aiMatchPurchase(nameOrKey);
+      return;
+    }
+    this.recordPurchase(key, nameOrKey, "exact");
+  }
+
+  private recordPurchase(key: string, todoName: string, matchedBy: string): void {
+    const name = this.storage.data.items[key]?.name ?? todoName;
     this.storage.update((s) => {
       const stats = (s.stats[key] ??= {
         key,
@@ -279,7 +301,6 @@ export class WillysApp {
       });
       stats.purchases.push(Date.now());
       if (stats.purchases.length > 200) stats.purchases = stats.purchases.slice(-200);
-      // resolve pending suggestions
       for (const [id, sug] of Object.entries(s.suggestions)) {
         if (sug.key === key && sug.status === "pending") {
           sug.status = "accepted";
@@ -287,9 +308,88 @@ export class WillysApp {
         }
       }
     });
-    this.storage.recordEvent({ at: Date.now(), kind: "purchase", key, name, source: "todo" });
-    LOG.info(`purchase recorded: ${name} (${key})`);
+    this.storage.recordEvent({ at: Date.now(), kind: "purchase", key, name, source: "todo", matchedBy });
+    LOG.info(`purchase recorded: ${name} (${key}, ${matchedBy})`);
     void this.publishAllSensors();
+  }
+
+  /** Ask the AI to map a checked-off line to a known registry item. */
+  private aiMatchPurchase(todoName: string): void {
+    const items = this.storage.data.items;
+    const cached = this.storage.data.aiMatchCache[normalizeItem(todoName)];
+    if (cached && items[cached]) {
+      this.recordPurchase(cached, todoName, "ai-cache");
+      return;
+    }
+    if (!aiConfigured(this.ai)) {
+      LOG.info(`unmatched purchase "${todoName}" (no AI configured)`);
+      return;
+    }
+    const candidates = Object.values(items).map((i) => ({ key: i.key, name: i.name }));
+    if (!candidates.length) return;
+    matchPurchaseKey(this.ai, todoName, candidates)
+      .then((aiKey) => {
+        if (!aiKey) return;
+        this.storage.update((s) => {
+          s.aiMatchCache[normalizeItem(todoName)] = aiKey;
+        });
+        this.recordPurchase(aiKey, todoName, "ai");
+      })
+      .catch((e) => LOG.warn(`AI match failed: ${e instanceof Error ? e.message : e}`));
+  }
+
+  // --------------------------------------------------------------- ai
+
+  getAiConfig(): { configured: boolean; baseUrl: string; model: string; apiKeyHint: string } {
+    const hint = this.ai.apiKey
+      ? `${this.ai.apiKey.slice(0, 3)}…${this.ai.apiKey.slice(-4)}`
+      : "";
+    return { configured: aiConfigured(this.ai), baseUrl: this.ai.baseUrl, model: this.ai.model, apiKeyHint: hint };
+  }
+
+  setAiConfig(patch: { apiKey?: string; baseUrl?: string; model?: string }): void {
+    if (typeof patch.apiKey === "string") this.ai.apiKey = patch.apiKey.trim();
+    if (typeof patch.baseUrl === "string" && patch.baseUrl.trim()) this.ai.baseUrl = patch.baseUrl.trim().replace(/\/+$/, "");
+    if (typeof patch.model === "string" && patch.model.trim()) this.ai.model = patch.model.trim();
+    saveAiConfig(this.cfg.dataDir, this.ai);
+    LOG.info(`AI config updated (model=${this.ai.model}, configured=${aiConfigured(this.ai)})`);
+  }
+
+  async aiTest(): Promise<{ ok: boolean; model: string; latencyMs: number; error?: string }> {
+    return aiTest(this.ai);
+  }
+
+  /** Natural language: "2 liter mjölk och ett bröd" -> items on the list. */
+  async aiAdd(text: string): Promise<Array<{ key: string; name: string; qty: number }>> {
+    const parsed = await nlParseItems(this.ai, text);
+    const added: Array<{ key: string; name: string; qty: number }> = [];
+    for (const p of parsed) {
+      const key = normalizeItem(p.name);
+      if (!this.storage.data.items[key]) {
+        this.storage.upsertItem({
+          key,
+          name: p.name,
+          searchQuery: p.name,
+          aisle: suggestAisleFor(this.storage.data, p.name),
+        });
+      }
+      await this.shoppingList.addItem(this.todoEntity, p.qty > 1 ? `${p.qty}x ${p.name}` : p.name);
+      this.storage.update((s) => {
+        const stats = (s.stats[key] ??= {
+          key,
+          purchases: [],
+          addedCount: 0,
+          dismissedCount: 0,
+          mode: "suggest",
+        });
+        stats.addedCount++;
+        stats.lastAddedAt = Date.now();
+      });
+      this.storage.recordEvent({ at: Date.now(), kind: "added", key, name: p.name, source: "ai" });
+      added.push({ key, name: p.name, qty: p.qty });
+    }
+    await this.publishAllSensors();
+    return added;
   }
 
   async handleDecision(d: DecisionInput): Promise<void> {
@@ -346,6 +446,8 @@ export class WillysApp {
     const norm = normalizeItem(nameOrKey);
     const state = this.storage.data;
     if (state.items[norm]) return norm;
+    const cached = state.aiMatchCache[norm];
+    if (cached && state.items[cached]) return cached;
     // fuzzy: item whose normalized name matches or alias hit
     for (const [key, item] of Object.entries(state.items)) {
       if (normalizeItem(item.name) === norm) return key;
@@ -369,6 +471,7 @@ export class WillysApp {
       labels: p.labels ?? [],
       outOfStock: p.outOfStock,
       basketType: (p as { productBasketType?: { code?: string } }).productBasketType?.code,
+      image: p.image?.url ?? p.thumbnail?.url ?? null,
     }));
   }
 

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "preact/hooks";
 import { api } from "./api";
 import type { AppStateData } from "./types";
 import { ListTab, SearchTab, ItemsTab, AislesTab, DealsTab, SettingsTab } from "./tabs";
+import { applyTheme, loadTheme } from "./theme";
 
 type Html = (strings: TemplateStringsArray, ...values: unknown[]) => JSX.Element;
 export const html = htm.bind(h as unknown as (...args: unknown[]) => unknown) as Html;
@@ -95,6 +96,8 @@ export function mount(el: Element | null): void {
     console.error("willys-panel: #app container not found");
     return;
   }
+  // Apply saved theme before first paint to avoid a flash
+  applyTheme(loadTheme());
   // Normalize a trailing "//" in the ingress document URL (see api.ts)
   try {
     const clean = window.location.pathname.replace(/\/{2,}/g, "/");

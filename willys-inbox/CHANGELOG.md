@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.0
+
+- **Willys theme**: white + Willys red as base colors, light/dark mode, and
+  user-adjustable accent/background colors (saved per browser)
+- **Product grids** for Reor and Sök: responsive image cards, max 5 columns,
+  capped at 25 items (5x5)
+- **Live search** with 300 ms debounce and cancellation of stale requests
+- **AI integration (OpenCode Zen, OpenAI-compatible)** configured in the panel:
+  - Natural language add: "2 liter mjölk och bröd" -> items on the list
+  - Smart check-off matching: when a shopping-list line doesn't match a known
+    item, the AI maps it to the right registry entry (cached), improving the
+    habit learner
+  - Default model gpt-5.4-nano; test-connection button; key stored in /data
+
 ## 0.1.9
 
 - Fix WebKit "The string did not match the expected pattern": the Ingress

@@ -87,6 +87,7 @@ export interface AppStateData {
   dealsUpdated: number | null;
   lastComposeAt: number | null;
   storeId: string;
+  aiConfigured: boolean;
   predictions: Prediction[];
 }
 
@@ -100,6 +101,7 @@ export interface SearchHit {
   labels: string[];
   outOfStock: boolean;
   basketType?: string;
+  image?: string | null;
   /** panel-local: aisle chosen in the search-result dropdown */
   _aisle?: string;
 }

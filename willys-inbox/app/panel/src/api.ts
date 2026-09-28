@@ -15,11 +15,12 @@ interface ErrorBody {
   error?: string;
 }
 
-async function req<T = unknown>(method: string, url: string, body?: unknown): Promise<T> {
+async function req<T = unknown>(method: string, url: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const res = await fetch(BASE + url, {
     method,
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
+    signal,
   });
   if (!res.ok) {
     let msg = `${res.status}`;
@@ -52,10 +53,24 @@ export const api = {
   state: () => req("GET", "api/state"),
   debug: () => req<import("./types").DebugInfo>("GET", "api/debug"),
   list: () => req<{ items: import("./types").TodoItem[] }>("GET", "api/list"),
-  search: (q: string) =>
+  aiConfig: () =>
+    req<{ configured: boolean; baseUrl: string; model: string; apiKeyHint: string }>("GET", "api/ai/config"),
+  saveAiConfig: (patch: { apiKey?: string; baseUrl?: string; model?: string }) =>
+    req<{ configured: boolean; baseUrl: string; model: string; apiKeyHint: string }>(
+      "POST",
+      "api/ai/config",
+      patch,
+    ),
+  aiTest: () =>
+    req<{ ok: boolean; model: string; latencyMs: number; error?: string }>("POST", "api/ai/test"),
+  aiAdd: (text: string) =>
+    req<{ added: Array<{ key: string; name: string; qty: number }> }>("POST", "api/ai/add", { text }),
+  search: (q: string, signal?: AbortSignal) =>
     req<{ results: import("./types").SearchHit[] }>(
       "GET",
       `api/search?q=${encodeURIComponent(q)}`,
+      undefined,
+      signal,
     ),
   addItem: (payload: import("./types").AddItemPayload) =>
     req<{ key: string; aisle: string }>("POST", "api/items", payload),

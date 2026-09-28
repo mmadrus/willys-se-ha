@@ -98,6 +98,7 @@ export interface AppState {
   priceSnapshot: Record<string, { price: number; at: number }>; // itemKey -> last known storage price
   lastComposeAt: number | null;
   lastAnnouncedDealCodes: string[];  // avoid re-notifying same deals forever
+  aiMatchCache: Record<string, string>; // normalized todo name -> item key (LLM-verified)
   firstRunAt: number | null;
 }
 
@@ -115,6 +116,7 @@ export function emptyState(): AppState {
     priceSnapshot: {},
     lastComposeAt: null,
     lastAnnouncedDealCodes: [],
+    aiMatchCache: {},
     firstRunAt: null,
   };
 }
