@@ -57,7 +57,27 @@ export function ListTab({ state, reload, notify }: TabProps): JSX.Element {
   const compose = async (): Promise<void> => {
     notify("Komponerar …");
     const res = await api.compose(true);
-    notify(`La till ${res.added} varor, ${res.suggested} förslag`);
+    if (res.composed === 0 && res.suggested === 0) {
+      const s = res.sources;
+      notify(
+        `Inget att lägga till (standardvaror: ${s.staples}, förfallna: ${s.due}, reor: ${s.deals}). ` +
+          (s.staples === 0
+            ? "Markera standardvaror i Sök- eller Varor-fliken först."
+            : "Modellen lär sig efter några inköp – kolla Förslag nedan."),
+      );
+      reload();
+      return;
+    }
+    if (res.added === 0) {
+      notify(`Kunde inte skriva till ${res.todoEntity} – kontrollera att entiteten finns (se Diagnostik).`);
+      reload();
+      return;
+    }
+    if (res.composed === 0 && res.suggested > 0) {
+      notify(`${res.suggested} förslag väntar på ditt svar nedan (inget lagt till automatiskt).`);
+    } else {
+      notify(`La till ${res.added} varor på ${res.todoEntity}${res.suggested ? `, ${res.suggested} förslag` : ""}`);
+    }
     reload();
     const d = await api.list();
     setTodos(d.items ?? []);

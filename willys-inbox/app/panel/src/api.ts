@@ -45,8 +45,11 @@ export interface ItemPatch {
 
 export interface ComposeResponse {
   added: number;
+  composed: number;
   suggested: number;
+  sources: { staples: number; due: number; deals: number };
   entries: unknown[];
+  todoEntity: string;
 }
 
 export const api = {

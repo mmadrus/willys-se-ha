@@ -33,6 +33,10 @@ export interface ComposeResult {
   suggestions: Suggestion[];
   dealHits: ComposedEntry[];
   predictionsConsidered: Prediction[];
+  /** How many candidates each source contributed (before dedupe/skips). */
+  sources: { staples: number; due: number; deals: number };
+  /** Set by the caller after attempting to add to the to-do entity. */
+  added?: number;
 }
 
 /** If an existing pending todo matches item key or willys code, skip adding. */
@@ -64,6 +68,7 @@ export function composeRun(
   const dealHits: ComposedEntry[] = [];
   const predictionsConsidered: Prediction[] = [];
   const taken = new Set<string>();
+  const sources = { staples: 0, due: 0, deals: 0 };
 
   const pendingFilter = (entry: { key: string; name: string; willysCode?: string }) =>
     hasPendingOnList(todos, entry);
@@ -74,6 +79,7 @@ export function composeRun(
     if (!staple.active) continue;
     const item = state.items[key];
     if (!item) continue;
+    sources.staples++;
     if (staple.skipIfBoughtWithinDays) {
       const stats = state.stats[key];
       const last = lastPurchaseAt(stats);
@@ -105,6 +111,7 @@ export function composeRun(
     const win = suggestionWindow(pred, now, opts.notificationLeadDays);
     if (!win.open || win.expired) continue;
     if (isSuppressedByDismissal(stats, now)) continue;
+    sources.due++;
     if (pendingFilter({ key, name: item.name, willysCode: item.willysCode })) continue;
 
     const autoEligible =
@@ -140,6 +147,7 @@ export function composeRun(
       const item = state.items[wlKey];
       if (!item) continue;
       if (pendingFilter({ key: wlKey, name: item.name, willysCode: item.willysCode })) continue;
+      sources.deals++;
       taken.add(wlKey);
       const hit: ComposedEntry = {
         key: wlKey,
@@ -164,6 +172,7 @@ export function composeRun(
     suggestions,
     dealHits,
     predictionsConsidered: predictionsConsidered.filter(Boolean).map((p) => p as Prediction),
+    sources,
   };
 }
 

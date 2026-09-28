@@ -17,6 +17,7 @@ export interface AppConfig {
   notifyService: string;      // e.g. notify.mobile_app_pixel_9
   digestThreshold: number;
   watchlist: string[];        // item keys tracked for cheapest-unit-price
+  todoEntity: string;         // HA to-do entity used as the shopping list
   dataDir: string;
   ingressPort: number;
   supervisorToken: string;
@@ -81,6 +82,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     notifyService: str(opts, "notify_service"),
     digestThreshold: num(opts, "digest_threshold", 3),
     watchlist: strList(opts, "deals_watchlist"),
+    todoEntity: str(opts, "todo_entity", "todo.shopping_list"),
     dataDir,
     ingressPort: num({ v: env.WILLYS_INGRESS_PORT }, "v", 8099),
     supervisorToken: env.SUPERVISOR_TOKEN ?? env.HASSIO_TOKEN ?? "",

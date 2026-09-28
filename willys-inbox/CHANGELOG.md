@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.3
+
+- Compose is honest about what happened: response and toasts now show
+  per-source counts (staples/due/deals), whether items were actually added
+  to the to-do entity, and guidance when there was nothing to add
+- New option `todo_entity` (default `todo.shopping_list`) if your shopping
+  list to-do entity is named differently
+- Diagnostics shows the configured to-do entity
+
 ## 0.2.2
 
 - **Brand-aware search**: multi-word queries like "mjölk skånemejeri" now

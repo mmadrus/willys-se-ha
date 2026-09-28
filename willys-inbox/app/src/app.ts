@@ -57,9 +57,9 @@ export class WillysApp {
   readonly supervisor: SupervisorBridge;
   readonly shoppingList: ShoppingListClient;
   readonly sensors: SensorPublisher;
+  readonly todoEntity: string;
   private events: HaEventsBridge | null = null;
   private lastError = "";
-  private todoEntity: string;
   ai: AiConfig;
 
   constructor(readonly cfg: AppConfig) {
@@ -68,7 +68,7 @@ export class WillysApp {
     this.supervisor = new SupervisorBridge(cfg);
     this.shoppingList = new ShoppingListClient(cfg);
     this.sensors = new SensorPublisher(this.supervisor);
-    this.todoEntity = "todo.shopping_list";
+    this.todoEntity = cfg.todoEntity || "todo.shopping_list";
     this.ai = loadAiConfig(cfg.dataDir);
   }
 
@@ -242,7 +242,12 @@ export class WillysApp {
     if (result.listEntries.length) {
       const summaries = result.listEntries.map((e) => e.name);
       const added = await this.shoppingList.addItemsSequential(this.todoEntity, summaries);
+      result.added = added;
       LOG.info(`compose: added ${added}/${summaries.length} items to ${this.todoEntity}`);
+      if (added === 0) {
+        this.lastError = `could not add to ${this.todoEntity} - does the to-do entity exist?`;
+        LOG.error(`${this.lastError}`);
+      }
       for (const e of result.listEntries) {
         this.storage.update((s) => {
           const stats = (s.stats[e.key] ??= {
@@ -257,6 +262,10 @@ export class WillysApp {
         });
         this.storage.recordEvent({ at: Date.now(), kind: "added", key: e.key, name: e.name, source: "compose", reason: e.reason });
       }
+    } else {
+      LOG.info(
+        `compose: nothing to add (staples=${result.sources.staples}, due=${result.sources.due}, deals=${result.sources.deals})`,
+      );
     }
 
     // merge new deal/due suggestions into pending store

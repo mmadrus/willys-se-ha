@@ -1,5 +1,5 @@
 name: Willys Inbox
-version: 0.2.2
+version: 0.2.3
 slug: willys-inbox
 description: Shopping list assistant for Willys - deals watcher, ordered lists and habit learning
 arch:
@@ -36,6 +36,7 @@ options:
   deals_refresh_minutes: 240
   notify_service: ''
   digest_threshold: 3
+  todo_entity: todo.shopping_list
   deals_watchlist: []
 schema:
   username: str
@@ -51,4 +52,5 @@ schema:
   deals_refresh_minutes: int(60,)
   notify_service: str?
   digest_threshold: int(1,20)
+  todo_entity: str
   deals_watchlist: [str]

@@ -154,13 +154,14 @@ route("GET", "/api/health", async (_req, res) => {
 route("GET", "/api/debug", async (_req, res) => {
   const cfg = currentApp.cfg;
   const out: Record<string, unknown> = {
-    version: "0.1.3",
+    version: "0.2.3",
     env_keys: Object.keys(process.env)
       .filter((k) => /SUPERVISOR|HASSIO|TOKEN|^TZ$/i.test(k))
       .sort(),
     token_present: Boolean(process.env.SUPERVISOR_TOKEN ?? process.env.HASSIO_TOKEN),
     token_length: (process.env.SUPERVISOR_TOKEN ?? process.env.HASSIO_TOKEN ?? "").length,
     supervisor_url: cfg.supervisorUrl,
+    todo_entity: currentApp.todoEntity,
     options: {
       username_set: Boolean(cfg.willysUsername),
       username_length: cfg.willysUsername.length,
@@ -359,9 +360,12 @@ route("POST", "/api/compose", async (req, res) => {
   const b = await body(req);
   const result = await currentApp.composeNow(b.includeDeals !== false);
   ok(res, {
-    added: result.listEntries.length,
+    added: result.added ?? 0,
+    composed: result.listEntries.length,
     suggested: result.suggestions.length,
+    sources: result.sources,
     entries: result.listEntries,
+    todoEntity: currentApp.todoEntity,
   });
 });
 
