@@ -359,6 +359,7 @@ route("POST", "/api/aisles/reorder", async (req, res) => {
 route("POST", "/api/compose", async (req, res) => {
   const b = await body(req);
   const result = await currentApp.composeNow(b.includeDeals !== false);
+  const missing = result.added === 0 && result.listEntries.length > 0;
   ok(res, {
     added: result.added ?? 0,
     composed: result.listEntries.length,
@@ -366,6 +367,7 @@ route("POST", "/api/compose", async (req, res) => {
     sources: result.sources,
     entries: result.listEntries,
     todoEntity: currentApp.todoEntity,
+    ...(missing ? { availableEntities: await currentApp.listTodoEntities() } : {}),
   });
 });
 
@@ -401,6 +403,29 @@ route("GET", "/api/stores", async (_req, res) => {
 route("POST", "/api/refresh", async (_req, res) => {
   await currentApp.refreshDealsJob();
   ok(res);
+});
+
+// ------------------------------------------------------- shopping list
+
+route("GET", "/api/todo-entities", async (_req, res) => {
+  ok(res, {
+    entities: await currentApp.listTodoEntities(),
+    current: currentApp.todoEntity,
+  });
+});
+
+route("POST", "/api/todo-entity", async (req, res) => {
+  const b = await body(req);
+  const entity = typeof b.entityId === "string" ? b.entityId.trim() : "";
+  if (entity && !(await currentApp.todoEntityExists(entity))) {
+    const available = await currentApp.listTodoEntities();
+    return json(res, 400, {
+      error: `${entity} finns inte i HA`,
+      availableEntities: available,
+    });
+  }
+  currentApp.setTodoEntityOverride(entity || null);
+  ok(res, { current: currentApp.todoEntity });
 });
 
 // ------------------------------------------------------------------- ai

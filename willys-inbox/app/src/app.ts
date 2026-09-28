@@ -57,10 +57,18 @@ export class WillysApp {
   readonly supervisor: SupervisorBridge;
   readonly shoppingList: ShoppingListClient;
   readonly sensors: SensorPublisher;
-  readonly todoEntity: string;
   private events: HaEventsBridge | null = null;
   private lastError = "";
   ai: AiConfig;
+
+  /** Effective shopping-list entity: panel override wins over the option. */
+  get todoEntity(): string {
+    return (
+      this.storage.data.todoEntityOverride ||
+      this.cfg.todoEntity ||
+      "todo.shopping_list"
+    );
+  }
 
   constructor(readonly cfg: AppConfig) {
     this.storage = new Storage(cfg.dataDir);
@@ -68,7 +76,6 @@ export class WillysApp {
     this.supervisor = new SupervisorBridge(cfg);
     this.shoppingList = new ShoppingListClient(cfg);
     this.sensors = new SensorPublisher(this.supervisor);
-    this.todoEntity = cfg.todoEntity || "todo.shopping_list";
     this.ai = loadAiConfig(cfg.dataDir);
   }
 
@@ -240,6 +247,17 @@ export class WillysApp {
     });
 
     if (result.listEntries.length) {
+      // Verify the target entity exists before attempting writes
+      if (!(await this.todoEntityExists(this.todoEntity))) {
+        const available = await this.listTodoEntities();
+        this.lastError =
+          `to-do entity ${this.todoEntity} not found. Available: ` +
+          (available.map((t) => t.entity_id).join(", ") || "none") +
+          ". Pick one in the panel settings.";
+        LOG.error(this.lastError);
+        result.added = 0;
+        return result;
+      }
       const summaries = result.listEntries.map((e) => e.name);
       const added = await this.shoppingList.addItemsSequential(this.todoEntity, summaries);
       result.added = added;
@@ -468,6 +486,50 @@ export class WillysApp {
       await this.composeNow(true);
     } else if (c.cmd === "refresh") {
       await this.refreshDealsJob();
+    }
+  }
+
+  // ------------------------------------------------- shopping list target
+
+  /** All to-do entities currently present in HA. */
+  async listTodoEntities(): Promise<Array<{ entity_id: string; name: string }>> {
+    try {
+      const res = await fetch(`${this.supervisor.urlFor("/core/api/states")}`, {
+        headers: { Authorization: `Bearer ${this.supervisor.token}` },
+      });
+      if (!res.ok) return [];
+      const states = (await res.json()) as Array<{
+        entity_id: string;
+        attributes?: { friendly_name?: string };
+      }>;
+      return states
+        .filter((s) => s.entity_id.startsWith("todo."))
+        .map((s) => ({
+          entity_id: s.entity_id,
+          name: s.attributes?.friendly_name ?? s.entity_id,
+        }));
+    } catch {
+      return [];
+    }
+  }
+
+  setTodoEntityOverride(entityId: string | null): void {
+    const clean = entityId?.trim();
+    this.storage.update((s) => {
+      s.todoEntityOverride = clean ? clean : null;
+    });
+    LOG.info(`shopping list entity set to: ${this.todoEntity}`);
+  }
+
+  /** Does the configured to-do entity exist in HA? */
+  async todoEntityExists(entityId: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.supervisor.urlFor(`/core/api/states/${entityId}`)}`, {
+        headers: { Authorization: `Bearer ${this.supervisor.token}` },
+      });
+      return res.ok;
+    } catch {
+      return false;
     }
   }
 

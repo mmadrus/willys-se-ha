@@ -50,6 +50,7 @@ export interface ComposeResponse {
   sources: { staples: number; due: number; deals: number };
   entries: unknown[];
   todoEntity: string;
+  availableEntities?: import("./types").TodoEntityInfo[];
 }
 
 export const api = {
@@ -88,4 +89,8 @@ export const api = {
     req("POST", `api/decisions/${encodeURIComponent(id)}`, { choice }),
   refresh: () => req("POST", "api/refresh"),
   stores: () => req<{ stores: import("./types").StoreInfo[] }>("GET", "api/stores"),
+  todoEntities: () =>
+    req<{ entities: import("./types").TodoEntityInfo[]; current: string }>("GET", "api/todo-entities"),
+  setTodoEntity: (entityId: string) =>
+    req<{ current: string }>("POST", "api/todo-entity", { entityId }),
 };

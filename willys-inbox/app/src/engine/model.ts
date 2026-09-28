@@ -99,6 +99,8 @@ export interface AppState {
   lastComposeAt: number | null;
   lastAnnouncedDealCodes: string[];  // avoid re-notifying same deals forever
   aiMatchCache: Record<string, string>; // normalized todo name -> item key (LLM-verified)
+  /** Panel-selected shopping list entity; wins over the todo_entity option. */
+  todoEntityOverride: string | null;
   firstRunAt: number | null;
 }
 
@@ -117,6 +119,7 @@ export function emptyState(): AppState {
     lastComposeAt: null,
     lastAnnouncedDealCodes: [],
     aiMatchCache: {},
+    todoEntityOverride: null,
     firstRunAt: null,
   };
 }

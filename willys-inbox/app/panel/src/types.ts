@@ -113,6 +113,11 @@ export interface StoreInfo {
   city?: string;
 }
 
+export interface TodoEntityInfo {
+  entity_id: string;
+  name: string;
+}
+
 export type DebugInfo = Record<string, unknown>;
 
 export type AiProviderId = "opencode" | "openai" | "anthropic" | "google" | "openrouter" | "custom";

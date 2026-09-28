@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.4
+
+- Shopping list entity picker in the panel (Inställningar → Inköpslista):
+  lists the to-do entities that actually exist in your HA and saves the
+  choice without a restart (override stored in /data; the todo_entity
+  option still works as fallback)
+- Compose verifies the target entity exists before writing; if it doesn't,
+  the error names the entities that DO exist, and the panel toast shows them
+- Fix: validation of the picked entity was skipped (un-awaited promise)
+
 ## 0.2.3
 
 - Compose is honest about what happened: response and toasts now show

@@ -69,7 +69,11 @@ export function ListTab({ state, reload, notify }: TabProps): JSX.Element {
       return;
     }
     if (res.added === 0) {
-      notify(`Kunde inte skriva till ${res.todoEntity} – kontrollera att entiteten finns (se Diagnostik).`);
+      const avail = res.availableEntities?.map((t) => t.entity_id).join(", ");
+      notify(
+        `Kunde inte skriva till ${res.todoEntity}` +
+          (avail ? ` – befintliga listor: ${avail}. Välj en under Inställningar.` : " – kontrollera entiteten (se Diagnostik)."),
+      );
       reload();
       return;
     }
@@ -475,6 +479,10 @@ export function SettingsTab({ state, reload, notify }: TabProps): JSX.Element {
   const [aiUrl, setAiUrl] = useState("");
   const [aiModel, setAiModel] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
+  const [todoEntities, setTodoEntities] = useState<{ entities: import("./types").TodoEntityInfo[] } | null>(null);
+  const [currentTodo, setCurrentTodo] = useState<{ current: string } | null>(null);
+  const [selectedTodo, setSelectedTodo] = useState("");
+  const [todoError, setTodoError] = useState("");
 
   useMemo(() => {
     api
@@ -488,7 +496,28 @@ export function SettingsTab({ state, reload, notify }: TabProps): JSX.Element {
         setAiProvider(c.provider);
       })
       .catch(() => undefined);
+    api
+      .todoEntities()
+      .then((d) => {
+        setTodoEntities({ entities: d.entities });
+        setCurrentTodo(d);
+      })
+      .catch(() => setTodoEntities(null));
   }, []);
+
+  const saveTodo = async (): Promise<void> => {
+    if (!selectedTodo) return;
+    setTodoError("");
+    try {
+      const d = await api.setTodoEntity(selectedTodo);
+      setCurrentTodo(d);
+      notify(`Inköpslista: ${d.current}`);
+    } catch (e) {
+      const msg = (e as Error).message;
+      setTodoError(msg);
+      notify(msg);
+    }
+  };
 
   const providerInfo = ai?.providers.find((p) => p.id === (aiProvider || ai?.provider));
   const usingCustomUrl = aiProvider === "custom";
@@ -600,6 +629,28 @@ export function SettingsTab({ state, reload, notify }: TabProps): JSX.Element {
         <button class="btn primary" disabled=${aiBusy} onClick=${() => void saveAi()}>Spara</button>
         <button class="btn" disabled=${aiBusy} onClick=${() => void testAi()}>Testa anslutning</button>
       </div>
+    </div>
+
+    <div class="card">
+      <h2>Inköpslista</h2>
+      <div class="muted" style="margin-bottom:8px">
+        Listan läggs i: <b>${currentTodo?.current ?? "todo.shopping_list"}</b>. Välj bland de to-do-listor som finns i din HA:
+      </div>
+      ${todoEntities && html`
+        <div class="row">
+          <select style="flex:1 1 auto"
+                  value=${selectedTodo}
+                  onChange=${(e: Event) => setSelectedTodo((e.target as HTMLSelectElement).value)}>
+            <option value="">(oförändrat)</option>
+            ${todoEntities.entities.map((t) => html`
+              <option key=${t.entity_id} value=${t.entity_id}>${t.name} (${t.entity_id})</option>
+            `)}
+          </select>
+          <button class="btn primary" onClick=${() => void saveTodo()}>Spara lista</button>
+        </div>
+        ${todoError && html`<div class="muted" style="color:var(--accent); margin-top:6px">${todoError}</div>`}
+      `}
+      ${!todoEntities && html`<div class="empty" style="padding:8px">Kunde inte hämta to-do-listor.</div>`}
     </div>
 
     <div class="card">

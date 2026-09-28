@@ -52,6 +52,7 @@ export class Storage {
         watchlist: raw.watchlist ?? {},
         basketAisleHints: raw.basketAisleHints ?? {},
         aiMatchCache: raw.aiMatchCache ?? {},
+        todoEntityOverride: typeof raw.todoEntityOverride === "string" ? raw.todoEntityOverride : null,
       });
     } catch (e) {
       log.error("storage: failed to load state, starting fresh", e);
