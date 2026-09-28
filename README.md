@@ -42,3 +42,4 @@ WILLYS_OPTIONS=./dev-options.json WILLYS_DATA_DIR=./data npm run dev
 ```
 
 `dev-options.json` example: `{"username":"","password":"","store_id":""}`
+# willys-se-ha
