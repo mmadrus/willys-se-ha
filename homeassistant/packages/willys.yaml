@@ -1,0 +1,110 @@
+# Willys Inbox - Home Assistant package
+#
+# Install: copy this file into your HA config, e.g.
+#   /config/packages/willys.yaml
+# and make sure packages are enabled in configuration.yaml:
+#
+#   homeassistant:
+#     packages: !include_dir_named packages
+#
+# Then reload automations (Developer tools -> YAML -> Automations) or restart.
+
+# ---------------------------------------------------------------- helpers
+# The add-on polls these. Set by the notification-action automation below
+# and by scripts (compose/refresh). Keep the names in sync with the add-on.
+input_text:
+  willys_decision:
+    name: Willys decision
+    max: 255
+    mode: text
+    icon: mdi:cart-check
+  willys_command:
+    name: Willys command
+    max: 255
+    mode: text
+    icon: mdi:cog
+
+template:
+  # Mirrors the add-on's sensors for dashboard cards (optional)
+  - sensor:
+      - name: Willys top deal
+        unique_id: willys_top_deal
+        icon: mdi:tag-outline
+        state: "{{ state_attr('sensor.willys_deals', 'items')[0].name if state_attr('sensor.willys_deals', 'items') else 'Inga' }}"
+        availability: "{{ states('sensor.willys_deals') not in ['unknown', 'unavailable'] }}"
+        attributes:
+          percent_off: "{{ state_attr('sensor.willys_deals', 'items')[0].percent_off if state_attr('sensor.willys_deals', 'items') else 0 }}"
+
+# ---------------------------------------------------------------- scripts
+script:
+  willys_compose:
+    alias: Willys - skapa inköpslista
+    icon: mdi:cart-plus
+    description: Låter add-on komponera listan (standardvaror + prediktioner + reor)
+    sequence:
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.willys_command
+        data:
+          value: '{"cmd":"compose","nonce":"{{ now().timestamp() }}"}'
+
+  willys_refresh_deals:
+    alias: Willys - uppdatera reor
+    icon: mdi:tag-refresh
+    sequence:
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.willys_command
+        data:
+          value: '{"cmd":"refresh","nonce":"{{ now().timestamp() }}"}'
+
+# ------------------------------------------------------------ automations
+automation:
+  # Notification action buttons -> decision for the add-on.
+  # Fires when you tap "Lägg i listan" / "Inte nu" / "Aldrig" on a
+  # Willys suggestion notification on the companion app.
+  - alias: Willys decision from notification
+    id: willys_decision_from_notification
+    mode: queued
+    trigger:
+      - platform: event
+        event_type: mobile_app_notification_action
+    action:
+      - variables:
+          action: "{{ trigger.event.data.action | default('') }}"
+      - condition: "{{ action.startswith('WILLYS_') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.willys_decision
+        data:
+          value: >-
+            {%- if action == 'WILLYS_DIGEST_ADD' -%}
+              {"id":"digest","choice":"add"}
+            {%- elif action.endswith('_ADD') -%}
+              {"id":"{{ action[7:-4] }}","choice":"add"}
+            {%- elif action.endswith('_SKIP') -%}
+              {"id":"{{ action[7:-5] }}","choice":"pass"}
+            {%- elif action.endswith('_NEVER') -%}
+              {"id":"{{ action[7:-6] }}","choice":"never"}
+            {%- endif -%}
+
+  # Example: notify when a new top deal appears (>= 30% off)
+  - alias: Willys deal notification
+    id: willys_deal_notification
+    trigger:
+      - platform: state
+        entity_id: sensor.willys_deals
+    condition:
+      - condition: template
+        value_template: >-
+          {{ (state_attr('sensor.willys_deals','items') or []) | length > 0
+             and state_attr('sensor.willys_deals','items')[0].percent_off | int(0) >= 30 }}
+    action:
+      - service: persistent_notification.create
+        data:
+          title: Willys rea
+          message: >-
+            Topp-rea: {{ state_attr('sensor.willys_deals','items')[0].name }}
+            {{ state_attr('sensor.willys_deals','items')[0].price }} kr
+            ({{ state_attr('sensor.willys_deals','items')[0].percent_off }} %)
+          notification_id: willys_deal

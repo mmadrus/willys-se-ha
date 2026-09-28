@@ -1,0 +1,45 @@
+configuration:
+  username:
+    name: Willys användarnamn
+    description: Ditt personnummer (12 siffror) som du loggar in med på willys.se
+  password:
+    name: Willys lösenord
+    description: Lösenordet till ditt Willys-konto
+  store_id:
+    name: Butiks-ID
+    description: Lämna tomt för kontots hemmabutik. Hittar ID:n i panelen under Inställningar
+  timezone:
+    name: Tidszon
+    description: Används för schemaläggning (default Europe/Stockholm)
+  auto_add_mode:
+    name: Auto-läge
+    description: suggest = förslag via notis, auto = lägg till automatiskt vid hög säkerhet, off = endast panel
+  auto_add_confidence:
+    name: Säkerhetströskel för auto
+    description: Hur säker modellen måste vara (0-1) i auto-läge
+  notification_lead_days:
+    name: Förvarning (dagar)
+    description: Hur många dagar före predikterat inköpsdatum förslagen visas
+  compose_hour:
+    name: Komponeringstimme
+    description: Lokal timme då inköpslistan komponeras automatiskt
+  compose_lead_days:
+    name: Komponera X dagar innan
+    description: Fönster för schemalagd komponering
+  compose_day_of_week:
+    name: Komponerdag
+    description: 0=söndag … 6=lördag. Tomt = varje dag
+  deals_refresh_minutes:
+    name: Re-uppdatering av reor (minuter)
+    description: Hur ofta kampanjer hämtas (minst 60)
+  notify_service:
+    name: Notistjänst
+    description: t.ex. notify.mobile_app_din_telefon för notiser med knappar
+  digest_threshold:
+    name: Digest-gräns
+    description: Färre förslag än så = en notis per vara med knappar
+  deals_watchlist:
+    name: Bevakningslista
+    description: Varor som bevaks för lägsta pris (hanteras enklast i panelen)
+network:
+  8099/TCP: Panelen (används av Ingress)

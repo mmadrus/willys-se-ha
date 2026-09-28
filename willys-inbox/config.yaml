@@ -1,0 +1,53 @@
+name: Willys Inbox
+version: 0.1.0
+slug: willys-inbox
+description: Shopping list assistant for Willys - deals watcher, ordered lists and habit learning
+arch:
+  - aarch64
+  - amd64
+  - armhf
+  - armv7
+url: https://github.com/madrusan/ha_willys
+startup: services
+boot: auto
+timeout: 60
+hassio_api: true
+hassio_role: homeassistant
+homeassistant_api: true
+ingress: true
+ingress_port: 8099
+ingress_entry: /
+panel_title: Willys
+panel_icon: mdi:cart-outline
+panel_admin: false
+apparmor: true
+options:
+  username: ''
+  password: ''
+  store_id: ''
+  timezone: Europe/Stockholm
+  auto_add_mode: suggest
+  auto_add_confidence: 0.75
+  notification_lead_days: 1
+  compose_hour: 15
+  compose_lead_days: 2
+  compose_day_of_week: 6
+  deals_refresh_minutes: 240
+  notify_service: ''
+  digest_threshold: 3
+  deals_watchlist: []
+schema:
+  username: str
+  password: password
+  store_id: str?
+  timezone: str?
+  auto_add_mode: list(suggest|auto|off)
+  auto_add_confidence: float(0,1)
+  notification_lead_days: int(0,7)
+  compose_hour: int(0,23)
+  compose_lead_days: int(0,7)
+  compose_day_of_week: int(0,6)
+  deals_refresh_minutes: int(60,)
+  notify_service: str?
+  digest_threshold: int(1,20)
+  deals_watchlist: [str]

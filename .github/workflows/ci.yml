@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install + typecheck + test (server)
+        working-directory: willys-inbox/app
+        run: |
+          npm install --no-audit --no-fund
+          npm run typecheck
+          npm test
+          npm run build
+
+  panel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install + build (panel)
+        working-directory: willys-inbox/app/panel
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: [server, panel]
+    strategy:
+      matrix:
+        arch: [amd64, aarch64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Build ${{ matrix.arch }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: willys-inbox
+          platforms: linux/${{ matrix.arch }}
+          push: false
+          build-args: |
+            BUILD_VERSION=0.1.0
+            BUILD_ARCH=${{ matrix.arch }}

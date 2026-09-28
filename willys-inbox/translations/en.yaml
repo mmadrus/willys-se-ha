@@ -1,0 +1,45 @@
+configuration:
+  username:
+    name: Willys username
+    description: Your personnummer (12 digits) used to log in at willys.se
+  password:
+    name: Willys password
+    description: The password of your Willys account
+  store_id:
+    name: Store ID
+    description: Leave empty to use your account's home store. Find IDs in the panel settings tab
+  timezone:
+    name: Timezone
+    description: Used for scheduling (default Europe/Stockholm)
+  auto_add_mode:
+    name: Auto mode
+    description: suggest = notifications, auto = add automatically at high confidence, off = panel only
+  auto_add_confidence:
+    name: Auto confidence
+    description: Required model confidence (0-1) in auto mode
+  notification_lead_days:
+    name: Lead days
+    description: Days before the predicted purchase day to show suggestions
+  compose_hour:
+    name: Compose hour
+    description: Local hour when the shopping list is composed automatically
+  compose_lead_days:
+    name: Compose lead days
+    description: Window for the scheduled compose
+  compose_day_of_week:
+    name: Compose day
+    description: 0=Sunday … 6=Saturday. Empty = every day
+  deals_refresh_minutes:
+    name: Deals refresh (minutes)
+    description: How often campaigns are fetched (minimum 60)
+  notify_service:
+    name: Notify service
+    description: e.g. notify.mobile_app_your_phone for notifications with buttons
+  digest_threshold:
+    name: Digest threshold
+    description: Fewer suggestions than this = one actionable notification per item
+  deals_watchlist:
+    name: Watchlist
+    description: Items tracked for lowest price (managed in the panel)
+network:
+  8099/TCP: Panel (used by Ingress)
