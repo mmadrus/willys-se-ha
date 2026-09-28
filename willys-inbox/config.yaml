@@ -1,5 +1,5 @@
 name: Willys Inbox
-version: 0.1.0
+version: 0.1.1
 slug: willys-inbox
 description: Shopping list assistant for Willys - deals watcher, ordered lists and habit learning
 arch:
@@ -11,6 +11,7 @@ url: https://github.com/madrusan/ha_willys
 startup: services
 boot: auto
 timeout: 60
+init: false
 hassio_api: true
 hassio_role: homeassistant
 homeassistant_api: true
