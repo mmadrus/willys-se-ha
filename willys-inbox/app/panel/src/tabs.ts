@@ -1,37 +1,48 @@
-import { h } from "preact";
+import { h, type JSX } from "preact";
 import htm from "htm";
 import { useState, useMemo } from "preact/hooks";
-import { api } from "./api.js";
+import { api } from "./api";
+import type {
+  AppStateData,
+  DebugInfo,
+  SearchHit,
+  StoreInfo,
+  TodoItem,
+  AisleSection,
+} from "./types";
 
-const html = htm.bind(h);
+type Html = (strings: TemplateStringsArray, ...values: unknown[]) => JSX.Element;
+const html = htm.bind(h as unknown as (...args: unknown[]) => unknown) as Html;
 
-function aisleMap(state) {
-  const m = new Map();
-  for (const a of state.aisles) m.set(a.id, a);
-  return m;
+interface TabProps {
+  state: AppStateData;
+  reload: () => void;
+  notify: (msg: string) => void;
 }
 
-function aisleOf(state, key) {
-  const item = state.items[key];
-  return item ? item.aisle : "andra";
+function sortedAisles(state: AppStateData): AisleSection[] {
+  return [...state.aisles].sort((a, b) => a.order - b.order);
 }
 
 /* ------------------------------------------------------------- Lista tab */
 
-export function ListTab({ state, reload, notify }) {
-  const [todos, setTodos] = useState([]);
+export function ListTab({ state, reload, notify }: TabProps): JSX.Element {
+  const [todos, setTodos] = useState<TodoItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = () => api.list().then((d) => setTodos(d.items ?? [])).finally(() => setLoading(false));
-  useMemo(() => { load(); }, []);
+  useMemo(() => {
+    api
+      .list()
+      .then((d) => setTodos(d.items ?? []))
+      .finally(() => setLoading(false));
+  }, []);
 
-  const aisles = [...state.aisles].sort((a, b) => a.order - b.order);
-  const groups = new Map();
-  const unmatched = [];
+  const groups = new Map<string, TodoItem[]>();
+  const unmatched: string[] = [];
   for (const t of todos) {
     if (t.status !== "needs_action") continue;
     const norm = (t.summary ?? "").toLowerCase();
-    const item = Object.values(state.items).find(
+    const item = state.items.find(
       (i) => norm.includes(i.name.toLowerCase()) || i.name.toLowerCase().includes(norm),
     );
     const aisle = item ? item.aisle : "andra";
@@ -41,25 +52,26 @@ export function ListTab({ state, reload, notify }) {
     if (!item) unmatched.push(t.summary);
   }
 
-  const compose = async () => {
+  const compose = async (): Promise<void> => {
     notify("Komponerar …");
     const res = await api.compose(true);
     notify(`La till ${res.added} varor, ${res.suggested} förslag`);
     reload();
-    load();
+    const d = await api.list();
+    setTodos(d.items ?? []);
   };
 
   return html`
     <div class="card">
       <div class="row">
         <div class="grow muted">Komponerar standardvaror, prediktioner och reor i gångordning.</div>
-        <button class="btn primary" onClick=${compose}>Skapa inköpslista</button>
+        <button class="btn primary" onClick=${() => void compose()}>Skapa inköpslista</button>
       </div>
     </div>
     ${loading && html`<div class="empty">Hämtar lista …</div>`}
     ${!loading && todos.filter((t) => t.status === "needs_action").length === 0 &&
       html`<div class="empty">Listan är tom. Tryck "Skapa inköpslista".</div>`}
-    ${aisles.map((a) => {
+    ${sortedAisles(state).map((a) => {
       const items = groups.get(a.id);
       if (!items || !items.length) return null;
       return html`
@@ -82,10 +94,14 @@ export function ListTab({ state, reload, notify }) {
   `;
 }
 
-function pendingSuggestions(state, reload, notify) {
+function pendingSuggestions(
+  state: AppStateData,
+  reload: () => void,
+  notify: (msg: string) => void,
+): JSX.Element | null {
   const pending = state.suggestions.filter((s) => s.status === "pending");
   if (!pending.length) return null;
-  const decide = async (id, choice) => {
+  const decide = async (id: string, choice: "add" | "pass" | "never"): Promise<void> => {
     await api.decide(id, choice);
     notify(choice === "add" ? "Lade till" : choice === "never" ? "Förslaget ignoreras framgent" : "Avstår");
     reload();
@@ -102,9 +118,9 @@ function pendingSuggestions(state, reload, notify) {
           </div>
         </div>
         <div class="sug-actions">
-          <button class="btn primary small" onClick=${() => decide(s.id, "add")}>Lägg i listan</button>
-          <button class="btn small" onClick=${() => decide(s.id, "pass")}>Inte nu</button>
-          <button class="btn small ghost" onClick=${() => decide(s.id, "never")}>Aldrig</button>
+          <button class="btn primary small" onClick=${() => void decide(s.id, "add")}>Lägg i listan</button>
+          <button class="btn small" onClick=${() => void decide(s.id, "pass")}>Inte nu</button>
+          <button class="btn small ghost" onClick=${() => void decide(s.id, "never")}>Aldrig</button>
         </div>
       </div>
     `)}
@@ -113,12 +129,12 @@ function pendingSuggestions(state, reload, notify) {
 
 /* ------------------------------------------------------------- Sök tab */
 
-export function SearchTab({ state, reload, notify }) {
+export function SearchTab({ state, reload, notify }: TabProps): JSX.Element {
   const [q, setQ] = useState("");
-  const [results, setResults] = useState([]);
+  const [results, setResults] = useState<SearchHit[]>([]);
   const [busy, setBusy] = useState(false);
 
-  const doSearch = async (e) => {
+  const doSearch = async (e: Event): Promise<void> => {
     e?.preventDefault();
     if (!q.trim()) return;
     setBusy(true);
@@ -126,13 +142,13 @@ export function SearchTab({ state, reload, notify }) {
       const d = await api.search(q.trim());
       setResults(d.results ?? []);
     } catch (err) {
-      notify(`Sök fel: ${err.message}`);
+      notify(`Sök fel: ${(err as Error).message}`);
     } finally {
       setBusy(false);
     }
   };
 
-  const add = async (r, extra = {}) => {
+  const add = async (r: SearchHit, extra: Partial<{ asStaple: boolean; watch: boolean }> = {}): Promise<void> => {
     await api.addItem({
       name: r.name,
       code: r.code,
@@ -146,9 +162,10 @@ export function SearchTab({ state, reload, notify }) {
   };
 
   return html`
-    <form class="searchbar" onSubmit=${doSearch}>
+    <form class="searchbar"
+      onSubmit=${(e: Event) => void doSearch(e)}>
       <input class="big" type="search" placeholder="Sök i Willys sortiment …"
-             value=${q} onInput=${(e) => setQ(e.target.value)} />
+             value=${q} onInput=${(e: Event) => setQ((e.target as HTMLInputElement).value)} />
       <button class="btn primary" disabled=${busy}>${busy ? "…" : "Sök"}</button>
     </form>
     ${results.map((r) => html`
@@ -164,13 +181,12 @@ export function SearchTab({ state, reload, notify }) {
           </div>
         </div>
         <div class="sug-actions">
-          <select onChange=${(e) => { r._aisle = e.target.value; }}>
-            ${[...state.aisles].sort((a, b) => a.order - b.order).map((a) =>
-              html`<option key=${a.id} value=${a.id}>${a.name}</option>`)}
+          <select onChange=${(e: Event) => { r._aisle = (e.target as HTMLSelectElement).value; }}>
+            ${sortedAisles(state).map((a) => html`<option key=${a.id} value=${a.id}>${a.name}</option>`)}
           </select>
-          <button class="btn primary small" onClick=${() => add(r)}>Lägg till</button>
-          <button class="btn small" onClick=${() => add(r, { asStaple: true })}>Standardvara</button>
-          <button class="btn small" onClick=${() => add(r, { watch: true })}>Bevaka pris</button>
+          <button class="btn primary small" onClick=${() => void add(r)}>Lägg till</button>
+          <button class="btn small" onClick=${() => void add(r, { asStaple: true })}>Standardvara</button>
+          <button class="btn small" onClick=${() => void add(r, { watch: true })}>Bevaka pris</button>
         </div>
       </div>
     `)}
@@ -180,15 +196,16 @@ export function SearchTab({ state, reload, notify }) {
 
 /* ------------------------------------------------------------ Varor tab */
 
-export function ItemsTab({ state, reload, notify }) {
-  const aisleOrder = [...state.aisles].sort((a, b) => a.order - b.order);
-  const items = Object.values(state.items).sort((a, b) => {
-    const ai = aisleOrder.findIndex((x) => x.id === a.aisle);
-    const bi = aisleOrder.findIndex((x) => x.id === b.aisle);
+export function ItemsTab({ state, reload, notify }: TabProps): JSX.Element {
+  const aisles = sortedAisles(state);
+  const predByKey = new Map(state.predictions.map((p) => [p.key, p]));
+  const items = [...state.items].sort((a, b) => {
+    const ai = aisles.findIndex((x) => x.id === a.aisle);
+    const bi = aisles.findIndex((x) => x.id === b.aisle);
     return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi) || a.name.localeCompare(b.name, "sv");
   });
 
-  const patch = async (key, data) => {
+  const patch = async (key: string, data: Parameters<typeof api.patchItem>[1]): Promise<void> => {
     await api.patchItem(key, data);
     reload();
   };
@@ -200,22 +217,22 @@ export function ItemsTab({ state, reload, notify }) {
     <table class="grid">
       <tbody>
         ${items.map((i) => {
-          const st = state.stats?.[i.key];
+          const st = predByKey.get(i.key);
           return html`
             <tr key=${i.key}>
               <td class="grow">
                 <b>${i.name}</b>
                 <div class="muted">
-                  ${st?.purchases?.length ? html`Köpt ${st.purchases.length}x` : "Ingen historik"}
+                  ${st?.suggestionsCount ? html`Köpt ${st.suggestionsCount}x` : "Ingen historik"}
                 </div>
               </td>
               <td>
-                <select value=${i.aisle} onChange=${(e) => patch(i.key, { aisle: e.target.value })}>
-                  ${aisleOrder.map((a) => html`<option key=${a.id} value=${a.id}>${a.name}</option>`)}
+                <select value=${i.aisle} onChange=${(e: Event) => void patch(i.key, { aisle: (e.target as HTMLSelectElement).value })}>
+                  ${aisles.map((a) => html`<option key=${a.id} value=${a.id}>${a.name}</option>`)}
                 </select>
               </td>
               <td>
-                <select value=${st?.mode ?? "suggest"} onChange=${(e) => patch(i.key, { mode: e.target.value })}>
+                <select value=${st?.mode ?? "suggest"} onChange=${(e: Event) => void patch(i.key, { mode: (e.target as HTMLSelectElement).value as "suggest" | "auto" | "never" })}>
                   <option value="suggest">Föreslå</option>
                   <option value="auto">Auto</option>
                   <option value="never">Aldrig</option>
@@ -223,16 +240,16 @@ export function ItemsTab({ state, reload, notify }) {
               </td>
               <td>
                 ${stapleKeys.has(i.key)
-                  ? html`<button class="btn small" onClick=${async () => { await api.unsetStaple(i.key); reload(); }}>✓ Standard</button>`
-                  : html`<button class="btn small ghost" onClick=${async () => { await api.setStaple(i.key, { active: true, qty: 1 }); reload(); }}>Standard</button>`}
+                  ? html`<button class="btn small" onClick=${() => { void api.unsetStaple(i.key).then(reload); }}>✓ Standard</button>`
+                  : html`<button class="btn small ghost" onClick=${() => { void api.setStaple(i.key, { active: true, qty: 1 }).then(reload); }}>Standard</button>`}
               </td>
               <td>
                 ${watchKeys.has(i.key)
-                  ? html`<button class="btn small" onClick=${async () => { await api.unwatch(i.key); reload(); }}>👁</button>`
-                  : html`<button class="btn small ghost" onClick=${async () => { await api.watch(i.key); reload(); }}>👁</button>`}
+                  ? html`<button class="btn small" onClick=${() => { void api.unwatch(i.key).then(reload); }}>👁</button>`
+                  : html`<button class="btn small ghost" onClick=${() => { void api.watch(i.key).then(reload); }}>👁</button>`}
               </td>
               <td>
-                <button class="btn small danger" onClick=${async () => { await api.deleteItem(i.key); reload(); }}>✕</button>
+                <button class="btn small danger" onClick=${() => { void api.deleteItem(i.key).then(reload); }}>✕</button>
               </td>
             </tr>
           `;
@@ -245,10 +262,10 @@ export function ItemsTab({ state, reload, notify }) {
 
 /* ------------------------------------------------------ Gångordning tab */
 
-export function AislesTab({ state, reload, notify }) {
-  const [aisles, setAisles] = useState([...state.aisles].sort((a, b) => a.order - b.order));
+export function AislesTab({ state, reload, notify }: TabProps): JSX.Element {
+  const [aisles, setAisles] = useState<AisleSection[]>(sortedAisles(state));
 
-  const move = (idx, dir) => {
+  const move = (idx: number, dir: number): void => {
     const next = [...aisles];
     const j = idx + dir;
     if (j < 0 || j >= next.length) return;
@@ -256,14 +273,17 @@ export function AislesTab({ state, reload, notify }) {
     setAisles(next);
   };
 
-  const rename = (idx, name) => {
+  const rename = (idx: number, name: string): void => {
     const next = [...aisles];
     next[idx] = { ...next[idx], name };
     setAisles(next);
   };
 
-  const save = async () => {
-    await api.reorderAisles(aisles.map((a) => a.id), Object.fromEntries(aisles.map((a) => [a.id, a.name])));
+  const save = async (): Promise<void> => {
+    await api.reorderAisles(
+      aisles.map((a) => a.id),
+      Object.fromEntries(aisles.map((a) => [a.id, a.name])),
+    );
     notify("Gångordning sparad");
     reload();
   };
@@ -272,14 +292,14 @@ export function AislesTab({ state, reload, notify }) {
     <div class="card">
       <div class="row">
         <div class="grow muted">Ordningen styr i vilken ordning varor läggs på inköpslistan.</div>
-        <button class="btn primary" onClick=${save}>Spara ordning</button>
+        <button class="btn primary" onClick=${() => void save()}>Spara ordning</button>
       </div>
     </div>
     ${aisles.map((a, idx) => html`
       <div class="card" key=${a.id}>
         <div class="row">
           <span class="muted">${idx + 1}.</span>
-          <input type="text" class="grow" value=${a.name} onChange=${(e) => rename(idx, e.target.value)} />
+          <input type="text" class="grow" value=${a.name} onChange=${(e: Event) => rename(idx, (e.target as HTMLInputElement).value)} />
           <div class="arrow-btns">
             <button class="btn small" onClick=${() => move(idx, -1)}>↑</button>
             <button class="btn small" onClick=${() => move(idx, 1)}>↓</button>
@@ -292,9 +312,9 @@ export function AislesTab({ state, reload, notify }) {
 
 /* -------------------------------------------------------------- Reor tab */
 
-export function DealsTab({ state, reload, notify }) {
+export function DealsTab({ state, reload, notify }: TabProps): JSX.Element {
   const deals = state.deals ?? [];
-  const watch = async (d) => {
+  const watch = async (d: { name: string; code: string }): Promise<void> => {
     await api.addItem({ name: d.name, code: d.code, query: d.name, watch: true });
     notify(`Bevakar "${d.name}"`);
     reload();
@@ -313,7 +333,7 @@ export function DealsTab({ state, reload, notify }) {
               ${(d.labels ?? []).map((l) => html`<span class="badge ${l === "Willys plus" ? "loyalty" : ""}">${l}</span>`)}
             </div>
           </div>
-          <button class="btn small" onClick=${() => watch(d)}>Bevaka</button>
+          <button class="btn small" onClick=${() => void watch(d)}>Bevaka</button>
         </div>
       </div>
     `)}
@@ -323,21 +343,34 @@ export function DealsTab({ state, reload, notify }) {
 
 /* ---------------------------------------------------- Inställningar tab */
 
-export function SettingsTab({ state, reload, notify }) {
-  const [stores, setStores] = useState([]);
+export function SettingsTab({ state, reload, notify }: TabProps): JSX.Element {
+  const [stores, setStores] = useState<StoreInfo[]>([]);
   const [storeFilter, setStoreFilter] = useState("");
-  const [debug, setDebug] = useState(null);
+  const [debug, setDebug] = useState<DebugInfo | null>(null);
 
-  const loadStores = () => {
-    api.stores()
+  const loadStores = (): void => {
+    api
+      .stores()
       .then((d) => setStores(d.stores ?? []))
-      .catch((e) => notify(`Butiker: ${e.message}`));
+      .catch((e: Error) => notify(`Butiker: ${e.message}`));
   };
   useMemo(loadStores, []);
 
   const filtered = stores.filter(
     (s) => !storeFilter || s.name.toLowerCase().includes(storeFilter.toLowerCase()),
   );
+
+  const refreshDeals = async (): Promise<void> => {
+    await api.refresh();
+    notify("Reor uppdaterade");
+    reload();
+  };
+
+  const compose = async (): Promise<void> => {
+    const r = await api.compose(true);
+    notify(`La till ${r.added} varor`);
+    reload();
+  };
 
   return html`
     <div class="card">
@@ -347,7 +380,7 @@ export function SettingsTab({ state, reload, notify }) {
         Byt butik via add-ons inställningar (Inställningar → Tillägg → Willys Inbox) med butikens ID:
       </div>
       <input class="big" type="search" placeholder="Filtrera butiker …"
-             value=${storeFilter} onInput=${(e) => setStoreFilter(e.target.value)} />
+             value=${storeFilter} onInput=${(e: Event) => setStoreFilter((e.target as HTMLInputElement).value)} />
       <div style="max-height:340px; overflow-y:auto; margin-top:8px">
         ${filtered.map((s) => html`
           <div class="card" key=${s.id}>
@@ -365,27 +398,21 @@ export function SettingsTab({ state, reload, notify }) {
     <div class="card">
       <h2>Underhåll</h2>
       <div class="row">
-        <button class="btn" onClick=${async () => { await api.refresh(); notify("Reor uppdaterade"); reload(); }}>
-          Uppdatera reor nu
-        </button>
-        <button class="btn primary" onClick=${async () => { const r = await api.compose(true); notify(`La till ${r.added} varor`); reload(); }}>
-          Komponera lista nu
-        </button>
+        <button class="btn" onClick=${() => void refreshDeals()}>Uppdatera reor nu</button>
+        <button class="btn primary" onClick=${() => void compose()}>Komponera lista nu</button>
       </div>
     </div>
     <div class="card">
       <h2>Diagnostik</h2>
       <div class="row">
         <div class="grow muted">Visar API-behörigheter och miljövariabler (värden visas aldrig).</div>
-        <button class="btn" onClick=${() => runDebug(setDebug)}>Kör diagnostik</button>
+        <button class="btn" onClick=${() => { api.debug().then(setDebug).catch((e: Error) => setDebug({ error: e.message })); }}>
+          Kör diagnostik
+        </button>
       </div>
       ${debug && html`
         <pre style="overflow-x:auto; background:var(--bg3); padding:10px; border-radius:8px; font-size:12px">${JSON.stringify(debug, null, 2)}</pre>
       `}
     </div>
   `;
-}
-
-function runDebug(setDebug) {
-  api.debug().then(setDebug).catch((e) => setDebug({ error: String(e.message ?? e) }));
 }

@@ -1,16 +1,28 @@
-import { h, render } from "preact";
+import { h, render, type JSX } from "preact";
 import htm from "htm";
 import { useState, useEffect, useCallback } from "preact/hooks";
-import { api } from "./api.js";
-import { ListTab, SearchTab, ItemsTab, AislesTab, DealsTab, SettingsTab } from "./tabs.js";
+import { api } from "./api";
+import type { AppStateData } from "./types";
+import { ListTab, SearchTab, ItemsTab, AislesTab, DealsTab, SettingsTab } from "./tabs";
 
-const html = htm.bind(h);
+type Html = (strings: TemplateStringsArray, ...values: unknown[]) => JSX.Element;
+export const html = htm.bind(h as unknown as (...args: unknown[]) => unknown) as Html;
 
-export function useAppData(pollMs = 10000) {
-  const [state, setState] = useState(null);
-  const [error, setError] = useState(null);
-  const reload = useCallback(() => {
-    api.state().then(setState).catch((e) => setError(String(e.message ?? e)));
+export function useAppData(pollMs = 10000): {
+  state: AppStateData | null;
+  error: string | null;
+  reload: () => void;
+} {
+  const [state, setState] = useState<AppStateData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const reload = useCallback((): void => {
+    api
+      .state()
+      .then((s) => {
+        setState(s as AppStateData);
+        setError(null);
+      })
+      .catch((e: Error) => setError(String(e.message ?? e)));
   }, []);
   useEffect(() => {
     reload();
@@ -20,12 +32,14 @@ export function useAppData(pollMs = 10000) {
   return { state, error, reload };
 }
 
-export function App() {
+type TabId = "lista" | "sok" | "varor" | "gang" | "reor" | "inst";
+
+export function App(): JSX.Element {
   const { state, error, reload } = useAppData();
-  const [tab, setTab] = useState("lista");
+  const [tab, setTab] = useState<TabId>("lista");
   const [toast, setToast] = useState("");
 
-  const notify = useCallback((msg) => {
+  const notify = useCallback((msg: string): void => {
     setToast(msg);
     setTimeout(() => setToast(""), 2200);
   }, []);
@@ -37,10 +51,10 @@ export function App() {
 
   const pending = state.suggestions.filter((s) => s.status === "pending");
 
-  const TABS = [
+  const TABS: Array<[TabId, string]> = [
     ["lista", "Lista"],
     ["sok", "Sök"],
-    ["varor", `Varor (${Object.keys(state.items).length})`],
+    ["varor", `Varor (${state.items.length})`],
     ["gang", "Gångordning"],
     ["reor", "Reor"],
     ["inst", "Inställningar"],
@@ -74,6 +88,10 @@ export function App() {
   `;
 }
 
-export function mount(el) {
+export function mount(el: Element | null): void {
+  if (!el) {
+    console.error("willys-panel: #app container not found");
+    return;
+  }
   render(html`<${App} />`, el);
 }

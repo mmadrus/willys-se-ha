@@ -1,3 +1,3 @@
-import { mount } from "./app.js";
+import { mount } from "./app";
 
 mount(document.getElementById("app"));

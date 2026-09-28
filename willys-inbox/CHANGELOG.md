@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.7
+
+- Panel rewritten in TypeScript (typed API contracts, strict tsc in build)
+- Items list now derives purchase counts from the predictions payload
+
 ## 0.1.6
 
 - Fix panel API calls under Ingress: fetches were root-relative and hit Home
