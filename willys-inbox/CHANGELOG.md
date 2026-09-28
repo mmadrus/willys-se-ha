@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.6
+
+- Fix panel API calls under Ingress: fetches were root-relative and hit Home
+  Assistant's own API (404); the panel now derives its API base from the
+  ingress URL automatically
+
 ## 0.1.5
 
 - Fix panel "bad request": replace strict URL parsing with defensive string routing (no request can fail parsing anymore); offending requests are logged
