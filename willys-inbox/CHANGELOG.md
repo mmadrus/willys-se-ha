@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.5
+
+- Fix panel "bad request": replace strict URL parsing with defensive string routing (no request can fail parsing anymore); offending requests are logged
+- Fix false "core API not usable": health check now uses /core/api/config (GET /api without trailing slash is not an HA route)
+
 ## 0.1.4
 
 - **Fix missing SUPERVISOR_TOKEN**: the base image's s6-overlay starts the CMD with a scrubbed environment; run.sh now imports `/run/s6/container_environment` explicitly

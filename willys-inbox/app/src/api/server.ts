@@ -38,28 +38,23 @@ export function createServer(app: WillysApp, port: number) {
 
   async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
-      // Ingress support: HA forwards requests with X-Ingress-Path set to the
-      // proxied prefix; strip it so routes are stable under both modes.
-      const ingressPath = (req.headers["x-ingress-path"] as string | undefined) ?? "";
-      let url = req.url ?? "/";
-      if (ingressPath && url.startsWith(ingressPath)) url = url.slice(ingressPath.length) || "/";
-      let parsed: URL;
-      try {
-        parsed = new URL(url, "http://local");
-      } catch {
-        res.writeHead(400);
-        res.end("bad request");
-        return;
-      }
-      const path = parsed.pathname;
+      const rawUrl = req.url ?? "/";
+      if (process.env.WILLYS_DEBUG) LOG.debug(`${req.method} ${rawUrl}`);
+
+      // Some proxies send odd request targets; parse defensively without
+      // ever failing the request (URL parsing can throw on bad input).
+      const qIndex = rawUrl.indexOf("?");
+      const path = qIndex === -1 ? rawUrl : rawUrl.slice(0, qIndex);
+      const query = qIndex === -1 ? "" : rawUrl.slice(qIndex + 1);
+      const search = new URLSearchParams(query);
 
       if (path.startsWith("/api/")) {
-        await handleApi(req, res, path, parsed.searchParams, app);
+        await handleApi(req, res, path, search, app);
         return;
       }
       serveStatic(res, panelDir, path === "/" ? "/index.html" : path);
     } catch (e) {
-      LOG.error(`request failed: ${e instanceof Error ? e.stack : e}`);
+      LOG.error(`request failed: ${req.method} ${req.url} - ${e instanceof Error ? e.stack : e}`);
       json(res, 500, { error: "internal" });
     }
   }

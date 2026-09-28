@@ -58,11 +58,12 @@ export class SupervisorBridge {
 
   async coreApiAvailable(): Promise<boolean> {
     try {
-      const res = await fetchWithTimeout(this.url("/core/api"), {
+      // GET /api (no slash) is not an HA route; use a real endpoint
+      const res = await fetchWithTimeout(this.url("/core/api/config"), {
         headers: this.headers(),
       }, 5000);
       if (!res.ok) {
-        LOG.warn(`core API check -> HTTP ${res.status}${res.status === 401 ? " (token rejected; reinstall the add-on to refresh API permissions)" : ""}`);
+        LOG.warn(`core API check -> HTTP ${res.status}${res.status === 401 || res.status === 403 ? " (token rejected; reinstall the add-on to refresh API permissions)" : ""}`);
       }
       return res.ok;
     } catch {
