@@ -1,20 +1,13 @@
-// Compute the API base so requests work both directly (/) and under the
-// HA ingress proxy (/api/hassio_ingress/<token>/...).
-function apiBase(): string {
-  const p = window.location.pathname;
-  const m = p.match(/^(.*\/api\/hassio_ingress\/[^/]+)\/?$/);
-  if (m) return m[1] + "/";
-  return p.endsWith("/") ? p : p + "/";
-}
-
-const BASE = apiBase();
-
+// Use plain relative URLs (no leading slash): they resolve against the
+// document URL exactly like the ./assets/* references, which works under
+// any mount path (direct /, HA Ingress, reverse proxies) and avoids
+// WebKit rejecting pathname-derived absolute URLs.
 interface ErrorBody {
   error?: string;
 }
 
 async function req<T = unknown>(method: string, url: string, body?: unknown): Promise<T> {
-  const res = await fetch(BASE + url, {
+  const res = await fetch(url, {
     method,
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,

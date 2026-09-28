@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.8
+
+- Panel API calls now use plain relative URLs (same resolution as the asset
+  references that already worked) - fixes WebKit rejecting the
+  pathname-derived API base ("The string did not match the expected pattern")
+- Panel errors now include the document path for easier diagnosis
+
 ## 0.1.7
 
 - Panel rewritten in TypeScript (typed API contracts, strict tsc in build)

@@ -22,7 +22,9 @@ export function useAppData(pollMs = 10000): {
         setState(s as AppStateData);
         setError(null);
       })
-      .catch((e: Error) => setError(String(e.message ?? e)));
+      .catch((e: Error) =>
+        setError(`${String(e.message ?? e)} [sida=${window.location.pathname}]`),
+      );
   }, []);
   useEffect(() => {
     reload();
