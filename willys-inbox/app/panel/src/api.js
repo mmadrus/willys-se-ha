@@ -14,6 +14,7 @@ async function req(method, url, body) {
 
 export const api = {
   state: () => req("GET", "/api/state"),
+  debug: () => req("GET", "/api/debug"),
   list: () => req("GET", "/api/list"),
   search: (q) => req("GET", `/api/search?q=${encodeURIComponent(q)}`),
   addItem: (payload) => req("POST", "/api/items", payload),

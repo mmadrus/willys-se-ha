@@ -326,6 +326,7 @@ export function DealsTab({ state, reload, notify }) {
 export function SettingsTab({ state, reload, notify }) {
   const [stores, setStores] = useState([]);
   const [storeFilter, setStoreFilter] = useState("");
+  const [debug, setDebug] = useState(null);
 
   const loadStores = () => {
     api.stores()
@@ -372,5 +373,19 @@ export function SettingsTab({ state, reload, notify }) {
         </button>
       </div>
     </div>
+    <div class="card">
+      <h2>Diagnostik</h2>
+      <div class="row">
+        <div class="grow muted">Visar API-behörigheter och miljövariabler (värden visas aldrig).</div>
+        <button class="btn" onClick=${() => runDebug(setDebug)}>Kör diagnostik</button>
+      </div>
+      ${debug && html`
+        <pre style="overflow-x:auto; background:var(--bg3); padding:10px; border-radius:8px; font-size:12px">${JSON.stringify(debug, null, 2)}</pre>
+      `}
+    </div>
   `;
+}
+
+function runDebug(setDebug) {
+  api.debug().then(setDebug).catch((e) => setDebug({ error: String(e.message ?? e) }));
 }

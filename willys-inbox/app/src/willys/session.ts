@@ -35,7 +35,8 @@ export class WillysSession extends WillysApi {
 
   constructor(username: string, password: string, storeId = "") {
     super();
-    this.username = username;
+    // personnummer: tolerate dashes/spaces typed in the options UI
+    this.username = username.replace(/[\s-]/g, "");
     this.password = password;
     this.storeId = storeId;
   }
@@ -56,6 +57,15 @@ export class WillysSession extends WillysApi {
 
   private async doLogin(): Promise<void> {
     const customer = await super.login(this.username, this.password);
+    // Willys hands out guest sessions instead of an error when auth fails
+    const looksAnonymous =
+      !customer.firstName && /anonym/i.test(customer.name ?? "");
+    if (looksAnonymous || (!customer.firstName && !customer.email)) {
+      this.loggedIn = false;
+      throw new Error(
+        "Willys rejected the credentials (guest session returned) - check personnummer (12 digits) and password",
+      );
+    }
     this.loggedIn = true;
     this.lastLoginAt = Date.now();
     const homeStore = customer.homeStoreId ?? customer.storeId;

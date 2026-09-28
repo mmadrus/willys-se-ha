@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { WillysApp } from "../app.js";
 import type { AppConfig } from "../config.js";
 import { log } from "../log.js";
+import { fetchWithTimeout } from "../util.js";
 
 const LOG = log.child("api");
 
@@ -146,6 +147,55 @@ const ok = (res: ServerResponse, data: unknown = { ok: true }) => json(res, 200,
 
 route("GET", "/api/health", async (_req, res) => {
   ok(res, { ok: true, version: 1 });
+});
+
+route("GET", "/api/debug", async (_req, res) => {
+  const cfg = currentApp.cfg;
+  const out: Record<string, unknown> = {
+    version: "0.1.3",
+    env_keys: Object.keys(process.env)
+      .filter((k) => /SUPERVISOR|HASSIO|TOKEN|^TZ$/i.test(k))
+      .sort(),
+    token_present: Boolean(process.env.SUPERVISOR_TOKEN ?? process.env.HASSIO_TOKEN),
+    token_length: (process.env.SUPERVISOR_TOKEN ?? process.env.HASSIO_TOKEN ?? "").length,
+    supervisor_url: cfg.supervisorUrl,
+    options: {
+      username_set: Boolean(cfg.willysUsername),
+      username_length: cfg.willysUsername.length,
+      password_set: Boolean(cfg.willysPassword),
+      store_id: cfg.storeId || "(home store)",
+    },
+  };
+  try {
+    const ping = await fetchWithTimeout(`${cfg.supervisorUrl}/supervisor/ping`, {}, 4000);
+    out.supervisor_ping = ping.status;
+  } catch (e) {
+    out.supervisor_ping_error = e instanceof Error ? e.message : String(e);
+  }
+  const token = cfg.supervisorToken;
+  if (token) {
+    try {
+      const info = await fetchWithTimeout(`${cfg.supervisorUrl}/addons/self/info`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }, 4000);
+      out.self_info_status = info.status;
+      if (info.ok) {
+        const body = (await info.json()) as { data?: Record<string, unknown> };
+        const d = body.data ?? {};
+        out.self_info = {
+          slug: d.slug,
+          version: d.version,
+          hassio_api: d.hassio_api,
+          hassio_role: d.hassio_role,
+          homeassistant_api: d.homeassistant_api,
+          protected: d.protected,
+        };
+      }
+    } catch (e) {
+      out.self_info_error = e instanceof Error ? e.message : String(e);
+    }
+  }
+  ok(res, out);
 });
 
 route("GET", "/api/state", async (_req, res) => {

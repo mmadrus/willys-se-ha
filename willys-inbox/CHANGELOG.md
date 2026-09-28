@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3
+
+- Detect Willys guest sessions (rejected credentials) with a clear error instead of "logged in as anonymous"
+- Normalize personnummer (strip dashes/spaces) before login
+- New panel Diagnostics card (Inställningar → Diagnostik): shows token presence, Supervisor ping, and the app's API permissions (`/api/debug`)
+
 ## 0.1.2
 
 - Diagnose missing API permissions: boot log shows SUPERVISOR_TOKEN presence, sensors/services skip instead of spamming 401s
