@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.4
+
+- **Fix missing SUPERVISOR_TOKEN**: the base image's s6-overlay starts the CMD with a scrubbed environment; run.sh now imports `/run/s6/container_environment` explicitly
+- Drop bashio from run.sh (was failing API probes at library init before the env import could happen)
+
 ## 0.1.3
 
 - Detect Willys guest sessions (rejected credentials) with a clear error instead of "logged in as anonymous"
