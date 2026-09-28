@@ -95,5 +95,14 @@ export function mount(el: Element | null): void {
     console.error("willys-panel: #app container not found");
     return;
   }
+  // Normalize a trailing "//" in the ingress document URL (see api.ts)
+  try {
+    const clean = window.location.pathname.replace(/\/{2,}/g, "/");
+    if (clean !== window.location.pathname) {
+      window.history.replaceState(null, "", clean + window.location.search);
+    }
+  } catch {
+    /* non-fatal */
+  }
   render(html`<${App} />`, el);
 }

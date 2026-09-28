@@ -1,13 +1,22 @@
-// Use plain relative URLs (no leading slash): they resolve against the
-// document URL exactly like the ./assets/* references, which works under
-// any mount path (direct /, HA Ingress, reverse proxies) and avoids
-// WebKit rejecting pathname-derived absolute URLs.
+// Build an absolute API base. The document URL under Ingress can end with
+// "//" (ingress_entry joined onto the token path), which breaks relative
+// URL resolution in WebKit ("The string did not match the expected
+// pattern"). Collapsing duplicate slashes and using an absolute URL
+// avoids the relative-resolution path entirely.
+function apiUrlBase(): string {
+  const path = window.location.pathname.replace(/\/{2,}/g, "/");
+  const dir = path.endsWith("/") ? path : path + "/";
+  return window.location.origin + dir;
+}
+
+const BASE = apiUrlBase();
+
 interface ErrorBody {
   error?: string;
 }
 
 async function req<T = unknown>(method: string, url: string, body?: unknown): Promise<T> {
-  const res = await fetch(url, {
+  const res = await fetch(BASE + url, {
     method,
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,

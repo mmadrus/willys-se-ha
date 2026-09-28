@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.9
+
+- Fix WebKit "The string did not match the expected pattern": the Ingress
+  document URL ends with "//" (ingress_entry joined onto the token path),
+  which breaks relative URL resolution. The panel now collapses duplicate
+  slashes, builds absolute API URLs from origin + clean path, and
+  normalizes the visible URL on load.
+
 ## 0.1.8
 
 - Panel API calls now use plain relative URLs (same resolution as the asset
