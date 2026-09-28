@@ -55,6 +55,8 @@ export interface DealItem {
   labels: string[];
   outOfStock: boolean;
   image?: string | null;
+  /** guessed supermarket aisle (panel-side ordering/filtering) */
+  aisle?: string;
 }
 
 export interface Prediction {

@@ -425,12 +425,48 @@ export function AislesTab({ state, reload, notify }: TabProps): JSX.Element {
 
 const DEALS_PAGE_SIZE = 25;
 
+type DealSort = "gang" | "rabatt" | "pris" | "spar";
+
 export function DealsTab({ state, reload, notify }: TabProps): JSX.Element {
   const deals = state.deals ?? [];
   const [page, setPage] = useState(0);
-  const pages = Math.max(1, Math.ceil(deals.length / DEALS_PAGE_SIZE));
+  const [query, setQuery] = useState("");
+  const [aisleFilter, setAisleFilter] = useState("");
+  const [plusOnly, setPlusOnly] = useState(false);
+  const [sort, setSort] = useState<DealSort>("gang");
+
+  const aisleIdx = new Map(sortedAisles(state).map((a, i) => [a.id, i]));
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    let list = deals.filter((d) => {
+      if (aisleFilter && d.aisle !== aisleFilter) return false;
+      if (plusOnly && !(d.labels ?? []).includes("Willys plus")) return false;
+      if (q && !(`${d.name} ${d.unit ?? ""}`.toLowerCase().includes(q))) return false;
+      return true;
+    });
+    list = [...list].sort((a, b) => {
+      if (sort === "gang") {
+        const ai = aisleIdx.get(a.aisle ?? "andra") ?? 999;
+        const bi = aisleIdx.get(b.aisle ?? "andra") ?? 999;
+        if (ai !== bi) return ai - bi;
+        return b.percentOff - a.percentOff;
+      }
+      if (sort === "pris") return a.price - b.price;
+      if (sort === "spar") return b.savings - a.savings;
+      return b.percentOff - a.percentOff;
+    });
+    return list;
+  }, [deals, query, aisleFilter, plusOnly, sort]);
+
+  const pages = Math.max(1, Math.ceil(filtered.length / DEALS_PAGE_SIZE));
   const current = Math.min(page, pages - 1);
-  const slice = deals.slice(current * DEALS_PAGE_SIZE, (current + 1) * DEALS_PAGE_SIZE);
+  const slice = filtered.slice(current * DEALS_PAGE_SIZE, (current + 1) * DEALS_PAGE_SIZE);
+
+  // reset to first page when filters change
+  useEffect(() => {
+    setPage(0);
+  }, [query, aisleFilter, plusOnly, sort]);
 
   const changePage = (p: number): void => {
     setPage(Math.min(pages - 1, Math.max(0, p)));
@@ -448,6 +484,29 @@ export function DealsTab({ state, reload, notify }: TabProps): JSX.Element {
   };
 
   return html`
+    <div class="card" style="padding:10px 12px">
+      <div class="row">
+        <input type="search" class="grow" placeholder="Filtrera reor …"
+               value=${query} onInput=${(e: Event) => setQuery((e.target as HTMLInputElement).value)} />
+        <select value=${sort} onChange=${(e: Event) => setSort((e.target as HTMLSelectElement).value as DealSort)}>
+          <option value="gang">Gångordning</option>
+          <option value="rabatt">Rabatt %</option>
+          <option value="spar">Sparar kr</option>
+          <option value="pris">Lägsta pris</option>
+        </select>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <select value=${aisleFilter} onChange=${(e: Event) => setAisleFilter((e.target as HTMLSelectElement).value)}>
+          <option value="">Alla avdelningar</option>
+          ${sortedAisles(state).map((a) => html`<option key=${a.id} value=${a.id}>${a.name}</option>`)}
+        </select>
+        <label class="muted" style="display:flex; align-items:center; gap:6px; cursor:pointer">
+          <input type="checkbox" checked=${plusOnly} onChange=${(e: Event) => setPlusOnly((e.target as HTMLInputElement).checked)} />
+          Endast Willys plus
+        </label>
+        <span class="muted">${filtered.length} reor</span>
+      </div>
+    </div>
     <${ProductGrid}>
       ${slice.map((d: import("./types").DealItem) => html`
         <${ProductCard}
@@ -457,14 +516,16 @@ export function DealsTab({ state, reload, notify }: TabProps): JSX.Element {
         />
       `)}
     <//>
-    ${deals.length > DEALS_PAGE_SIZE && html`
+    ${filtered.length > DEALS_PAGE_SIZE && html`
       <div class="pager">
         <button class="btn small" disabled=${current <= 0} onClick=${() => changePage(current - 1)}>← Föregående</button>
-        <span class="muted">Sida ${current + 1} av ${pages} · ${deals.length} reor</span>
+        <span class="muted">Sida ${current + 1} av ${pages} · ${filtered.length} reor</span>
         <button class="btn small" disabled=${current >= pages - 1} onClick=${() => changePage(current + 1)}>Nästa →</button>
       </div>
     `}
-    ${!deals.length && html`<div class="empty">Inga reor hämtade än – tryck "Uppdatera reor" under Inställningar.</div>`}
+    ${!filtered.length && html`<div class="empty">
+      ${deals.length ? "Inga reor matchar filtret." : 'Inga reor hämtade än – tryck "Uppdatera reor" under Inställningar.'}
+    </div>`}
   `;
 }
 

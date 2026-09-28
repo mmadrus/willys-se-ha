@@ -7,6 +7,7 @@ import type { AppConfig } from "../config.js";
 import { log } from "../log.js";
 import { fetchWithTimeout, normalizeItem } from "../util.js";
 import { aiConfigured } from "../ai/llm.js";
+import { guessAisle } from "../engine/aisles.js";
 
 const LOG = log.child("api");
 
@@ -217,7 +218,8 @@ route("GET", "/api/state", async (_req, res) => {
     deals: (s.dealCache?.items ?? [])
       .filter((d) => !d.outOfStock && d.percentOff > 0)
       .sort((a, b) => b.percentOff - a.percentOff)
-      .slice(0, 500),
+      .slice(0, 500)
+      .map((d) => ({ ...d, aisle: guessAisle(d.name) })),
     dealsUpdated: s.dealCache?.fetchedAt ?? null,
     lastComposeAt: s.lastComposeAt,
     storeId: app.session.currentStoreId,

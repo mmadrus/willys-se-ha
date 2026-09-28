@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.6
+
+- Reor: sort by store walk order (Gångordning), Rabatt %, Sparar kr or
+  lowest price; filter by aisle, Willys-plus-only, and free-text search;
+  pagination respects the filters
+
 ## 0.2.5
 
 - Fix misleading write-error toast: when a compose produced only
