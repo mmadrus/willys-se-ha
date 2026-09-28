@@ -68,6 +68,12 @@ export function ListTab({ state, reload, notify }: TabProps): JSX.Element {
       reload();
       return;
     }
+    // Nothing composed = nothing was written; a write error is impossible here
+    if (res.composed === 0) {
+      notify(`${res.suggested} förslag väntar på ditt svar nedan (förslag läggs aldrig till automatiskt).`);
+      reload();
+      return;
+    }
     if (res.added === 0) {
       const avail = res.availableEntities?.map((t) => t.entity_id).join(", ");
       notify(
@@ -77,11 +83,7 @@ export function ListTab({ state, reload, notify }: TabProps): JSX.Element {
       reload();
       return;
     }
-    if (res.composed === 0 && res.suggested > 0) {
-      notify(`${res.suggested} förslag väntar på ditt svar nedan (inget lagt till automatiskt).`);
-    } else {
-      notify(`La till ${res.added} varor på ${res.todoEntity}${res.suggested ? `, ${res.suggested} förslag` : ""}`);
-    }
+    notify(`La till ${res.added} varor på ${res.todoEntity}${res.suggested ? `, ${res.suggested} förslag` : ""}`);
     reload();
     const d = await api.list();
     setTodos(d.items ?? []);

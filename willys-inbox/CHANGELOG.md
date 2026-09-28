@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.5
+
+- Fix misleading write-error toast: when a compose produced only
+  suggestions (e.g. rea-hits), the panel wrongly claimed a write failure.
+  Deal suggestions are suggestions by design - approve them under Förslag.
+
 ## 0.2.4
 
 - Shopping list entity picker in the panel (Inställningar → Inköpslista):
