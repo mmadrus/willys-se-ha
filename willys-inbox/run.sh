@@ -28,6 +28,6 @@ export WILLYS_DATA_DIR="${WILLYS_DATA_DIR:-/data}"
 export WILLYS_INGRESS_PORT="${WILLYS_INGRESS_PORT:-8099}"
 
 log() { echo "[$(date '+%H:%M:%S')] INFO: $*"; }
-log "Starting Willys Inbox..."
+log "Starting My Willys List..."
 
 exec node /app/server/index.js

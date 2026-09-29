@@ -1,22 +1,10 @@
-import { useEffect, useState } from "preact/hooks";
-
-export type ThemeMode = "light" | "dark";
-
-export interface ThemePrefs {
-  mode: ThemeMode;
-  /** accent color, Willys red by default */
-  accent: string | null;
-  /** page background override (empty = theme default) */
-  bg: string | null;
-}
+import { useEffect, useState } from "react";
+import { THEME_DEFAULTS, type ThemeMode, type ThemePrefs } from "./types-theme";
 
 const STORAGE_KEY = "willys-theme";
-export const WILLYS_RED = "#d6001c";
 
-export const THEME_DEFAULTS: Record<ThemeMode, { accent: string; bg: string }> = {
-  light: { accent: WILLYS_RED, bg: "#ffffff" },
-  dark: { accent: "#ff2d3f", bg: "#14161a" },
-};
+export type { ThemeMode, ThemePrefs };
+export { THEME_DEFAULTS, WILLYS_RED } from "./types-theme";
 
 export function loadTheme(): ThemePrefs {
   try {
@@ -38,12 +26,13 @@ export function saveTheme(prefs: ThemePrefs): void {
 export function applyTheme(prefs: ThemePrefs): void {
   const def = THEME_DEFAULTS[prefs.mode];
   const root = document.documentElement;
-  root.dataset.theme = prefs.mode;
-  root.style.setProperty("--accent", prefs.accent ?? def.accent);
-  root.style.setProperty("--bg", prefs.bg ?? def.bg);
+  root.classList.toggle("dark", prefs.mode === "dark");
+  root.style.setProperty("--primary", prefs.accent ?? def.accent);
+  root.style.setProperty("--ring", prefs.accent ?? def.accent);
+  root.style.setProperty("--background", prefs.bg ?? def.bg);
+  // keep light text readable on a user-picked light background? no: bg choice is theirs
 }
 
-/** React-ish hook: current theme + setters that persist and apply instantly. */
 export function useTheme(): [ThemePrefs, (p: ThemePrefs) => void] {
   const [prefs, setPrefs] = useState<ThemePrefs>(loadTheme);
   useEffect(() => {

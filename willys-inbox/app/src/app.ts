@@ -206,7 +206,7 @@ export class WillysApp {
         : `behövs ${it.dueInDays <= 0 ? "idag" : it.dueInDays === 1 ? "imorgon" : `om ${it.dueInDays} dagar`} (säkerhet ${(it.confidence * 100).toFixed(0)}%)`;
       if (perItem && this.cfg.notifyService) {
         await this.supervisor.notify(
-          "Willys Inbox",
+          "My Willys List",
           `${it.name} ${detail}`,
           [
             { action: `WILLYS_${it.id}_ADD`, title: "Lägg i listan" },
@@ -218,12 +218,12 @@ export class WillysApp {
     }
     if (!perItem) {
       const lines = items.map((i) => `• ${i.name}${i.reason === "deal" ? " (rea)" : ` (om ${i.dueInDays} d)`}`).join("\n");
-      await this.supervisor.notify("Willys Inbox – handla snart", lines, [
+      await this.supervisor.notify("My Willys List – handla snart", lines, [
         { action: "WILLYS_DIGEST_ADD", title: "Lägg till alla" },
       ]);
     } else if (!this.cfg.notifyService) {
       const lines = items.map((i) => `• ${i.name}${i.reason === "deal" ? " (rea)" : ` (om ${i.dueInDays} d)`}`).join("\n");
-      await this.supervisor.notifyPersistent("Willys Inbox", `Att handla snart:\n${lines}\n\nÖppna panelen för att godkänna.`);
+      await this.supervisor.notifyPersistent("My Willys List", `Att handla snart:\n${lines}\n\nÖppna panelen för att godkänna.`);
     }
   }
 

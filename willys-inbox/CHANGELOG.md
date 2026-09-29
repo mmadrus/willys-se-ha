@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0
+
+- **Renamed to "My Willys List"** (add-on name, panel title, notifications)
+- **Panel rebuilt on React + Tailwind + shadcn/ui** with the Willys
+  color scheme mapped to shadcn theme variables (user accent/background
+  choices now drive --primary/--background)
+- Search cards now reflect registry state: Standard/Bevaka buttons show
+  active state and toggle existing items instead of blindly creating
+- Deal cards get the same Standard/Bevaka toggles
+- Numbered pagination (1 … 4 5 6 … 12) for Sök and Reor
+
 ## 0.2.8
 
 - Fix "Standard" toggle in Varor: staples arrive as an array in the state

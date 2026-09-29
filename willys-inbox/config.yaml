@@ -1,5 +1,5 @@
-name: Willys Inbox
-version: 0.2.8
+name: My Willys List
+version: 0.3.0
 slug: willys-inbox
 description: Shopping list assistant for Willys - deals watcher, ordered lists and habit learning
 arch:
@@ -18,7 +18,7 @@ homeassistant_api: true
 ingress: true
 ingress_port: 8099
 ingress_entry: /
-panel_title: Willys
+panel_title: My Willys List
 panel_icon: mdi:cart-outline
 panel_admin: false
 apparmor: true

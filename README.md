@@ -1,4 +1,4 @@
-# Willys Inbox – Home Assistant add-on
+# My Willys List – Home Assistant add-on
 
 A Home Assistant add-on that watches [Willys](https://www.willys.se) deals, builds **ordered** shopping lists (in aisle-walk order) and **learns your buying habits** so it can suggest when to buy milk before you run out.
 

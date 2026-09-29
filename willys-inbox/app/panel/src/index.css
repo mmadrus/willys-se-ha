@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Willys Inbox theme - shadcn variables.
+   --primary/--background are overridden at runtime by the user's
+   accent/background preferences (see theme.ts). Defaults are
+   Willys white + red. */
+:root {
+  --background: #ffffff;
+  --foreground: #1c1c1e;
+  --card: #f7f7f8;
+  --card-foreground: #1c1c1e;
+  --primary: #d6001c;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #1c1c1e;
+  --muted: #f4f4f5;
+  --muted-foreground: #6e6e73;
+  --accent-soft: #fdeaec;
+  --destructive: #b3261e;
+  --border: #e3e3e6;
+  --input: #d9d9de;
+  --ring: #d6001c;
+  --radius: 0.625rem;
+}
+
+.dark {
+  --background: #14161a;
+  --foreground: #eef0f2;
+  --card: #1d2026;
+  --card-foreground: #eef0f2;
+  --primary: #ff2d3f;
+  --primary-foreground: #ffffff;
+  --secondary: #272b33;
+  --secondary-foreground: #eef0f2;
+  --muted: #272b33;
+  --muted-foreground: #9aa3ad;
+  --accent-soft: #3a1418;
+  --destructive: #e05d5d;
+  --border: #2c313a;
+  --input: #2c313a;
+  --ring: #ff2d3f;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent-soft: var(--accent-soft);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
