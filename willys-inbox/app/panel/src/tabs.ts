@@ -313,7 +313,7 @@ export function ItemsTab({ state, reload }: TabProps): JSX.Element {
     void api.patchItem(key, data).then(reload);
   };
 
-  const stapleKeys = new Set(Object.keys(state.staples));
+  const stapleKeys = new Set(state.staples.map((st) => st.key));
   const watchKeys = new Set(state.watchlist);
 
   return html`

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.8
+
+- Fix "Standard" toggle in Varor: staples arrive as an array in the state
+  payload and the panel derived keys with Object.keys() (indexes) - the
+  button never reflected or removed staple state
+
 ## 0.2.7
 
 - New Komponering setting: "Lägg rea-varor direkt på inköpslistan" -
