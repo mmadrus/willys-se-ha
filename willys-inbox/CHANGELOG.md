@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+
+- Panel layout: centered container (max-width 1024px) with padding
+
 ## 0.3.0
 
 - **Renamed to "My Willys List"** (add-on name, panel title, notifications)

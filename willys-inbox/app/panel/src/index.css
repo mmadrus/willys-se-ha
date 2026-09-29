@@ -70,3 +70,10 @@ body {
   color: var(--foreground);
   font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
 }
+
+/* Center the panel with comfortable padding */
+#app {
+  max-width: 1024px;
+  margin: 0 auto;
+  padding: 1rem 1rem 5rem;
+}
