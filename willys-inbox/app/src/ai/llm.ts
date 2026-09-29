@@ -64,7 +64,9 @@ export function isAiProvider(v: unknown): v is AiProvider {
   return typeof v === "string" && v in AI_PROVIDERS;
 }
 
-export interface AiConfig {
+/** One configured AI connection. Order in the list = fallback order. */
+export interface AiConnector {
+  id: string;
   provider: AiProvider;
   apiKey: string;
   /** Empty = provider preset default */
@@ -73,17 +75,49 @@ export interface AiConfig {
   model: string;
 }
 
+export interface AiConfig {
+  connectors: AiConnector[];
+}
+
 export function loadAiConfig(dataDir: string): AiConfig {
   try {
-    const raw = JSON.parse(readFileSync(join(dataDir, "ai-config.json"), "utf8")) as Partial<AiConfig>;
-    return {
-      provider: isAiProvider(raw.provider) ? raw.provider : "opencode",
-      apiKey: typeof raw.apiKey === "string" ? raw.apiKey : "",
-      baseUrl: typeof raw.baseUrl === "string" ? raw.baseUrl.trim().replace(/\/+$/, "") : "",
-      model: typeof raw.model === "string" ? raw.model.trim() : "",
+    const raw = JSON.parse(readFileSync(join(dataDir, "ai-config.json"), "utf8")) as {
+      connectors?: unknown;
+      // legacy single-connector format
+      provider?: unknown;
+      apiKey?: unknown;
+      baseUrl?: unknown;
+      model?: unknown;
     };
+    if (Array.isArray(raw.connectors)) {
+      const connectors = (raw.connectors as AiConnector[])
+        .filter((c) => c && isAiProvider(c.provider))
+        .map((c, i) => ({
+          id: typeof c.id === "string" && c.id ? c.id : `c${i + 1}`,
+          provider: c.provider,
+          apiKey: typeof c.apiKey === "string" ? c.apiKey : "",
+          baseUrl: typeof c.baseUrl === "string" ? c.baseUrl.trim().replace(/\/+$/, "") : "",
+          model: typeof c.model === "string" ? c.model.trim() : "",
+        }));
+      return { connectors };
+    }
+    // migrate legacy single-connector file
+    if (typeof raw.apiKey === "string" && raw.apiKey) {
+      return {
+        connectors: [
+          {
+            id: "c1",
+            provider: isAiProvider(raw.provider) ? raw.provider : "opencode",
+            apiKey: raw.apiKey,
+            baseUrl: typeof raw.baseUrl === "string" ? raw.baseUrl.trim().replace(/\/+$/, "") : "",
+            model: typeof raw.model === "string" ? raw.model.trim() : "",
+          },
+        ],
+      };
+    }
+    return { connectors: [] };
   } catch {
-    return { provider: "opencode", apiKey: "", baseUrl: "", model: "" };
+    return { connectors: [] };
   }
 }
 
@@ -93,17 +127,16 @@ export function saveAiConfig(dataDir: string, cfg: AiConfig): void {
   renameSync(tmp, join(dataDir, "ai-config.json"));
 }
 
-/** Resolve effective base URL / model, filling provider presets for blanks. */
-export function effectiveAi(cfg: AiConfig): { baseUrl: string; model: string } {
-  const preset = AI_PROVIDERS[cfg.provider];
+export function effectiveAi(c: AiConnector): { baseUrl: string; model: string } {
+  const preset = AI_PROVIDERS[c.provider];
   return {
-    baseUrl: (cfg.baseUrl || preset.baseUrl).replace(/\/+$/, ""),
-    model: cfg.model || preset.defaultModel,
+    baseUrl: (c.baseUrl || preset.baseUrl).replace(/\/+$/, ""),
+    model: c.model || preset.defaultModel,
   };
 }
 
 export function aiConfigured(cfg: AiConfig): boolean {
-  return cfg.apiKey.length > 0 && effectiveAi(cfg).baseUrl.length > 0 && effectiveAi(cfg).model.length > 0;
+  return cfg.connectors.some((c) => c.apiKey.length > 0);
 }
 
 export interface ChatMessage {
@@ -119,21 +152,17 @@ interface AnthropicResponse {
   content?: Array<{ type: string; text?: string }>;
 }
 
-interface AnthropicErrorResponse {
-  error?: { message?: string };
-}
-
-/** Chat completion across providers (OpenAI-compatible + Anthropic native). */
+/** Chat completion for ONE connector (OpenAI-compatible + Anthropic native). */
 export async function chatCompletion(
-  cfg: AiConfig,
+  connector: AiConnector,
   messages: ChatMessage[],
   opts: { maxTokens?: number; temperature?: number; timeoutMs?: number } = {},
 ): Promise<string> {
-  const { baseUrl, model } = effectiveAi(cfg);
+  const { baseUrl, model } = effectiveAi(connector);
   const maxTokens = opts.maxTokens ?? 300;
   const temperature = opts.temperature ?? 0;
 
-  if (cfg.provider === "anthropic") {
+  if (connector.provider === "anthropic") {
     const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n");
     const rest = messages.filter((m) => m.role !== "system");
     const res = await fetchWithTimeout(
@@ -141,7 +170,7 @@ export async function chatCompletion(
       {
         method: "POST",
         headers: {
-          "x-api-key": cfg.apiKey,
+          "x-api-key": connector.apiKey,
           "anthropic-version": "2023-06-01",
           "Content-Type": "application/json",
         },
@@ -151,14 +180,7 @@ export async function chatCompletion(
     );
     if (!res.ok) {
       const t = await res.text().catch(() => "");
-      let msg = `AI ${res.status}: ${t.slice(0, 160)}`;
-      try {
-        const body = JSON.parse(t) as AnthropicErrorResponse;
-        if (body.error?.message) msg = `AI ${res.status}: ${body.error.message.slice(0, 160)}`;
-      } catch {
-        /* keep raw */
-      }
-      throw new Error(msg);
+      throw new Error(`AI ${res.status}: ${t.slice(0, 160)}`);
     }
     const data = (await res.json()) as AnthropicResponse;
     const text = (data.content ?? [])
@@ -175,7 +197,7 @@ export async function chatCompletion(
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${cfg.apiKey}`,
+        Authorization: `Bearer ${connector.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ model, messages, temperature, max_tokens: maxTokens }),
@@ -192,6 +214,31 @@ export async function chatCompletion(
   return content;
 }
 
+/**
+ * Try each connector in order; first success wins. If a connector fails
+ * (bad key, error code, network) the next one is used.
+ */
+export async function chatWithFallback(
+  cfg: AiConfig,
+  messages: ChatMessage[],
+  opts: { maxTokens?: number; temperature?: number; timeoutMs?: number } = {},
+): Promise<string> {
+  const usable = cfg.connectors.filter((c) => c.apiKey.length > 0);
+  if (!usable.length) throw new Error("Ingen AI-anslutning konfigurerad");
+  let lastErr: unknown;
+  for (const connector of usable) {
+    try {
+      return await chatCompletion(connector, messages, opts);
+    } catch (e) {
+      lastErr = e;
+      LOG.warn(
+        `connector ${connector.id} (${connector.provider}) failed: ${e instanceof Error ? e.message : e} - trying next`,
+      );
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("All AI connectors failed");
+}
+
 /** Extract the first JSON array/object from a possibly chatty LLM answer. */
 export function extractJson<T>(text: string): T | null {
   const start = text.search(/[[{]/);
@@ -202,7 +249,7 @@ export function extractJson<T>(text: string): T | null {
   if (end <= start) return null;
   try {
     return JSON.parse(text.slice(start, end + 1)) as T;
-  } catch (e) {
+  } catch {
     LOG.warn("json extract failed", text.slice(0, 120));
     return null;
   }
@@ -215,7 +262,7 @@ export interface ParsedItem {
 
 /** Parse a free-text shopping phrase into structured items. */
 export async function nlParseItems(cfg: AiConfig, text: string): Promise<ParsedItem[]> {
-  const answer = await chatCompletion(cfg, [
+  const answer = await chatWithFallback(cfg, [
     {
       role: "system",
       content:
@@ -239,7 +286,7 @@ export async function matchPurchaseKey(
   todoName: string,
   candidates: Array<{ key: string; name: string }>,
 ): Promise<string | null> {
-  const answer = await chatCompletion(cfg, [
+  const answer = await chatWithFallback(cfg, [
     {
       role: "system",
       content:
@@ -257,15 +304,23 @@ export async function matchPurchaseKey(
   return found ? found.key : null;
 }
 
-/** Cheap connectivity test. */
-export async function aiTest(cfg: AiConfig): Promise<{ ok: boolean; model: string; latencyMs: number; error?: string }> {
+/** Connectivity test for ONE connector. */
+export async function aiTest(
+  connector: AiConnector,
+): Promise<{ ok: boolean; model: string; latencyMs: number; error?: string }> {
   const t0 = Date.now();
   try {
-    await chatCompletion(cfg, [
-      { role: "user", content: "Svara med exakt: OK" },
-    ], { maxTokens: 5, timeoutMs: 15_000 });
-    return { ok: true, model: effectiveAi(cfg).model, latencyMs: Date.now() - t0 };
+    await chatCompletion(connector, [{ role: "user", content: "Svara med exakt: OK" }], {
+      maxTokens: 5,
+      timeoutMs: 15_000,
+    });
+    return { ok: true, model: effectiveAi(connector).model, latencyMs: Date.now() - t0 };
   } catch (e) {
-    return { ok: false, model: effectiveAi(cfg).model, latencyMs: Date.now() - t0, error: e instanceof Error ? e.message : String(e) };
+    return {
+      ok: false,
+      model: effectiveAi(connector).model,
+      latencyMs: Date.now() - t0,
+      error: e instanceof Error ? e.message : String(e),
+    };
   }
 }

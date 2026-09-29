@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0
+
+- **Multiple AI connectors**: add any number of connections (any provider),
+  order them in the panel, delete with confirmation, test each one.
+  Calls try connectors top-down; on error the next is used automatically.
+- **Switch store in the UI**: Inställningar → Butik → "Använd" activates the
+  store for the session and refreshes deals; choice persists
+- **Manual jobs**: Underhåll gets "Kör prediktion nu" (deals + compose
+  buttons already existed); jobs are also available via POST /api/jobs/run
+- List page always shows the live shopping list (polled state, no stale copy)
+- Roomier cards (more padding between edges and content)
+
 ## 0.3.1
 
 - Panel layout: centered container (max-width 1024px) with padding

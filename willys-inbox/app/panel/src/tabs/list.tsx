@@ -1,31 +1,33 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { api } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import type { AppStateData } from "@/types";
+import type { AppStateData, TodoItem } from "@/types";
 import type { Notify } from "@/hooks";
 
 function sortedAisles(state: AppStateData) {
   return [...state.aisles].sort((a, b) => a.order - b.order);
 }
 
-export function ListTab({ state, reload, notify }: { state: AppStateData; reload: () => void; notify: Notify }) {
-  const [todos, setTodos] = useState<import("@/types").TodoItem[]>([]);
-  const [loading, setLoading] = useState(true);
+export function ListTab({
+  state,
+  reload,
+  notify,
+}: {
+  state: AppStateData;
+  reload: () => void;
+  notify: Notify;
+}) {
+  const todos: TodoItem[] = state.list ?? [];
   const [nlText, setNlText] = useState("");
   const [nlBusy, setNlBusy] = useState(false);
-  const [lastCompose, setLastCompose] = useState<null | { kind: "empty" | "write-error" | "suggestions" | "ok"; msg: string }>(null);
+  const [lastCompose, setLastCompose] = useState<
+    null | { kind: "empty" | "write-error" | "suggestions" | "ok"; msg: string }
+  >(null);
 
-  useMemo(() => {
-    api
-      .list()
-      .then((d) => setTodos(d.items ?? []))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const groups = new Map<string, import("@/types").TodoItem[]>();
+  const groups = new Map<string, TodoItem[]>();
   for (const t of todos) {
     if (t.status !== "needs_action") continue;
     const norm = (t.summary ?? "").toLowerCase();
@@ -37,10 +39,6 @@ export function ListTab({ state, reload, notify }: { state: AppStateData; reload
     arr.push(t);
     groups.set(aisle, arr);
   }
-
-  const refreshList = (): void => {
-    void api.list().then((d) => setTodos(d.items ?? []));
-  };
 
   const compose = async (): Promise<void> => {
     notify("Komponerar …");
@@ -56,7 +54,6 @@ export function ListTab({ state, reload, notify }: { state: AppStateData; reload
             : "Modellen lär sig efter några inköp."),
       });
       reload();
-      refreshList();
       return;
     }
     if (res.composed === 0) {
@@ -65,7 +62,6 @@ export function ListTab({ state, reload, notify }: { state: AppStateData; reload
         msg: `${res.suggested} förslag väntar på ditt svar nedan (förslag läggs aldrig till automatiskt).`,
       });
       reload();
-      refreshList();
       return;
     }
     if (res.added === 0) {
@@ -74,16 +70,16 @@ export function ListTab({ state, reload, notify }: { state: AppStateData; reload
         kind: "write-error",
         msg:
           `Kunde inte skriva till ${res.todoEntity}` +
-          (avail ? ` – befintliga listor: ${avail}. Välj en under Inställningar.` : " – kontrollera entiteten (se Diagnostik)."),
+          (avail
+            ? ` – befintliga listor: ${avail}. Välj en under Inställningar.`
+            : " – kontrollera entiteten (se Diagnostik)."),
       });
       reload();
-      refreshList();
       return;
     }
     setLastCompose(null);
     notify(`La till ${res.added} varor på ${res.todoEntity}${res.suggested ? `, ${res.suggested} förslag` : ""}`);
     reload();
-    refreshList();
   };
 
   const nlAdd = async (): Promise<void> => {
@@ -94,7 +90,6 @@ export function ListTab({ state, reload, notify }: { state: AppStateData; reload
       notify(`AI la till: ${r.added.map((a) => a.name).join(", ") || "inget"}`);
       setNlText("");
       reload();
-      refreshList();
     } catch (e) {
       notify(`AI: ${(e as Error).message}`);
     } finally {
@@ -108,13 +103,12 @@ export function ListTab({ state, reload, notify }: { state: AppStateData; reload
     await api.decide(id, choice);
     notify(choice === "add" ? "Lade till" : choice === "never" ? "Förslaget ignoreras framgent" : "Avstår");
     reload();
-    refreshList();
   };
 
   return (
     <div className="flex flex-col gap-2">
       <Card className="py-3">
-        <div className="flex flex-wrap items-center gap-2 px-1">
+        <div className="flex flex-wrap items-center gap-2">
           <p className="flex-1 text-sm text-muted-foreground min-w-48">
             Komponerar standardvaror, prediktioner och reor i gångordning.
           </p>
@@ -122,7 +116,7 @@ export function ListTab({ state, reload, notify }: { state: AppStateData; reload
         </div>
         {lastCompose && (
           <p
-            className={`mt-2 text-sm px-1 ${lastCompose.kind === "write-error" ? "text-primary font-medium" : "text-muted-foreground"}`}
+            className={`mt-2 text-sm ${lastCompose.kind === "write-error" ? "text-primary font-medium" : "text-muted-foreground"}`}
           >
             {lastCompose.msg}
           </p>
@@ -131,7 +125,7 @@ export function ListTab({ state, reload, notify }: { state: AppStateData; reload
 
       {state.aiConfigured && (
         <Card className="py-3">
-          <div className="flex flex-wrap items-center gap-2 px-1">
+          <div className="flex flex-wrap items-center gap-2">
             <Input
               className="flex-1 min-w-48"
               placeholder='Be AI: "2 liter mjölk, ett fullkornsbröd och smör"'
@@ -145,9 +139,10 @@ export function ListTab({ state, reload, notify }: { state: AppStateData; reload
         </Card>
       )}
 
-      {loading && <p className="text-center text-muted-foreground py-8">Hämtar lista …</p>}
-      {!loading && todos.filter((t) => t.status === "needs_action").length === 0 && (
-        <p className="text-center text-muted-foreground py-8">Listan är tom. Tryck "Skapa inköpslista".</p>
+      {todos.filter((t) => t.status === "needs_action").length === 0 && (
+        <p className="text-center text-muted-foreground py-8">
+          Listan är tom. Tryck "Skapa inköpslista".
+        </p>
       )}
 
       {sortedAisles(state).map((a) => {
@@ -158,7 +153,7 @@ export function ListTab({ state, reload, notify }: { state: AppStateData; reload
             <div className="text-xs font-bold uppercase tracking-wider text-primary mt-3 mb-1.5">{a.name}</div>
             {items.map((t) => (
               <Card key={t.uid} className="py-2.5 mb-2">
-                <div className="px-1 text-sm">{t.summary}</div>
+                <div className="text-sm">{t.summary}</div>
               </Card>
             ))}
           </div>
@@ -170,7 +165,7 @@ export function ListTab({ state, reload, notify }: { state: AppStateData; reload
           <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mt-4">Förslag</h2>
           {pending.map((s) => (
             <Card key={s.id} className="py-3">
-              <div className="flex flex-wrap items-center gap-2 px-1">
+              <div className="flex flex-wrap items-center gap-2">
                 <div className="flex-1 min-w-40">
                   <span className="font-semibold text-sm">{s.name}</span>
                   {s.reason === "due" && (
@@ -187,7 +182,7 @@ export function ListTab({ state, reload, notify }: { state: AppStateData; reload
                   )}
                 </div>
               </div>
-              <div className="flex flex-wrap gap-1.5 mt-2 px-1">
+              <div className="flex flex-wrap gap-1.5 mt-2">
                 <Button size="sm" onClick={() => void decide(s.id, "add")}>
                   Lägg i listan
                 </Button>

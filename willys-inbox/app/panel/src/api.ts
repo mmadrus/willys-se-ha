@@ -58,9 +58,21 @@ export const api = {
   debug: () => req<import("./types").DebugInfo>("GET", "api/debug"),
   list: () => req<{ items: import("./types").TodoItem[] }>("GET", "api/list"),
   aiConfig: () => req<import("./types").AiConfigInfo>("GET", "api/ai/config"),
-  saveAiConfig: (patch: import("./types").AiConfigPatch) => req<import("./types").AiConfigInfo>("POST", "api/ai/config", patch),
-  aiTest: () =>
-    req<{ ok: boolean; model: string; latencyMs: number; error?: string }>("POST", "api/ai/test"),
+  saveAiConnector: (patch: import("./types").AiConfigPatch) =>
+    req<import("./types").AiConfigInfo>("POST", "api/ai/config", patch),
+  deleteAiConnector: (id: string) =>
+    req<import("./types").AiConfigInfo>("DELETE", `api/ai/config/${encodeURIComponent(id)}`),
+  reorderAiConnectors: (ids: string[]) =>
+    req<import("./types").AiConfigInfo>("POST", "api/ai/config/reorder", { ids }),
+  testAiConnector: (id: string) =>
+    req<{ ok: boolean; model: string; latencyMs: number; error?: string }>(
+      "POST",
+      `api/ai/test/${encodeURIComponent(id)}`,
+    ),
+  setStore: (storeId: string) =>
+    req<{ storeId: string }>("POST", "api/store", { storeId }),
+  runJob: (job: "deals" | "predict" | "compose") =>
+    req<{ ran: string }>("POST", "api/jobs/run", { job }),
   aiAdd: (text: string) =>
     req<{ added: Array<{ key: string; name: string; qty: number }> }>("POST", "api/ai/add", { text }),
   search: (q: string, page = 0, signal?: AbortSignal) =>

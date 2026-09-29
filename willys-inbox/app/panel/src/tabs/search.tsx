@@ -151,7 +151,7 @@ export function SearchTab({ state, reload, notify }: { state: AppStateData; relo
         }}
       />
       <Card className="py-2.5">
-        <div className="flex flex-wrap items-center gap-2 px-1">
+        <div className="flex flex-wrap items-centergap-2">
           <span className="text-sm text-muted-foreground">Avdelning för nya varor:</span>
           <Select value={selectedAisle} onValueChange={setSelectedAisle}>
             <SelectTrigger className="w-56">

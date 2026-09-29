@@ -23,6 +23,7 @@ import {
   saveAiConfig,
   isAiProvider,
   type AiConfig,
+  type AiConnector,
   type AiProvider,
 } from "./ai/llm.js";
 
@@ -127,8 +128,9 @@ export class WillysApp {
     }
     try {
       await this.session.ensureLoggedIn();
-      if (this.cfg.storeId && this.cfg.storeId !== this.session.currentStoreId) {
-        await this.session.selectStore(this.cfg.storeId);
+      const wantedStore = this.storage.data.storeOverride || this.cfg.storeId || "";
+      if (wantedStore && wantedStore !== this.session.currentStoreId) {
+        await this.session.selectStore(wantedStore);
       }
       const result = await fetchDeals(this.session);
       this.storage.update((s) => {
@@ -382,49 +384,91 @@ export class WillysApp {
 
   getAiConfig(): {
     configured: boolean;
-    provider: AiProvider;
     providers: Array<{ id: AiProvider; label: string; baseUrl: string; defaultModel: string }>;
-    baseUrl: string;
-    model: string;
-    apiKeyHint: string;
+    connectors: Array<{
+      id: string;
+      provider: AiProvider;
+      baseUrl: string;
+      model: string;
+      apiKeyHint: string;
+    }>;
   } {
-    const hint = this.ai.apiKey
-      ? `${this.ai.apiKey.slice(0, 3)}…${this.ai.apiKey.slice(-4)}`
-      : "";
-    const eff = effectiveAi(this.ai);
     return {
       configured: aiConfigured(this.ai),
-      provider: this.ai.provider,
       providers: Object.values(AI_PROVIDERS).map((p) => ({
         id: p.id,
         label: p.label,
         baseUrl: p.baseUrl,
         defaultModel: p.defaultModel,
       })),
-      baseUrl: eff.baseUrl,
-      model: eff.model,
-      apiKeyHint: hint,
+      connectors: this.ai.connectors.map((c) => ({
+        id: c.id,
+        provider: c.provider,
+        baseUrl: effectiveAi(c).baseUrl,
+        model: effectiveAi(c).model,
+        apiKeyHint: c.apiKey ? `${c.apiKey.slice(0, 3)}…${c.apiKey.slice(-4)}` : "",
+      })),
     };
   }
 
-  setAiConfig(patch: { provider?: string; apiKey?: string; baseUrl?: string; model?: string }): void {
-    if (typeof patch.provider === "string" && isAiProvider(patch.provider)) {
-      // Switching provider resets base/model so the new preset applies
-      if (patch.provider !== this.ai.provider) {
-        this.ai.baseUrl = "";
-        this.ai.model = "";
-      }
-      this.ai.provider = patch.provider;
+  /** Add a new connector (id generated) or update an existing one by id. */
+  upsertAiConnector(patch: {
+    id?: string;
+    provider?: string;
+    apiKey?: string;
+    baseUrl?: string;
+    model?: string;
+  }): AiConnector {
+    let connector: AiConnector | undefined = patch.id
+      ? this.ai.connectors.find((c) => c.id === patch.id)
+      : undefined;
+    if (!connector) {
+      connector = {
+        id: `c${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`,
+        provider: "opencode",
+        apiKey: "",
+        baseUrl: "",
+        model: "",
+      };
+      this.ai.connectors.push(connector);
     }
-    if (typeof patch.apiKey === "string") this.ai.apiKey = patch.apiKey.trim();
-    if (typeof patch.baseUrl === "string") this.ai.baseUrl = patch.baseUrl.trim().replace(/\/+$/, "");
-    if (typeof patch.model === "string") this.ai.model = patch.model.trim();
+    if (typeof patch.provider === "string" && isAiProvider(patch.provider)) {
+      if (patch.provider !== connector.provider) {
+        connector.baseUrl = "";
+        connector.model = "";
+      }
+      connector.provider = patch.provider;
+    }
+    if (typeof patch.apiKey === "string" && patch.apiKey.trim()) connector.apiKey = patch.apiKey.trim();
+    if (typeof patch.baseUrl === "string") connector.baseUrl = patch.baseUrl.trim().replace(/\/+$/, "");
+    if (typeof patch.model === "string") connector.model = patch.model.trim();
     saveAiConfig(this.cfg.dataDir, this.ai);
-    LOG.info(`AI config updated (provider=${this.ai.provider}, model=${effectiveAi(this.ai).model}, configured=${aiConfigured(this.ai)})`);
+    LOG.info(
+      `AI connector ${connector.id} saved (provider=${connector.provider}, model=${effectiveAi(connector).model})`,
+    );
+    return connector;
   }
 
-  async aiTest(): Promise<{ ok: boolean; model: string; latencyMs: number; error?: string }> {
-    return aiTest(this.ai);
+  removeAiConnector(id: string): void {
+    this.ai.connectors = this.ai.connectors.filter((c) => c.id !== id);
+    saveAiConfig(this.cfg.dataDir, this.ai);
+    LOG.info(`AI connector ${id} removed`);
+  }
+
+  reorderAiConnectors(ids: string[]): void {
+    this.ai.connectors.sort((a, b) => {
+      const ia = ids.indexOf(a.id);
+      const ib = ids.indexOf(b.id);
+      return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
+    });
+    saveAiConfig(this.cfg.dataDir, this.ai);
+    LOG.info(`AI connector order: ${ids.join(" -> ")}`);
+  }
+
+  async testAiConnector(id: string): Promise<{ ok: boolean; model: string; latencyMs: number; error?: string }> {
+    const c = this.ai.connectors.find((x) => x.id === id);
+    if (!c) return { ok: false, model: "?", latencyMs: 0, error: "okänd anslutning" };
+    return aiTest(c);
   }
 
   /** Natural language: "2 liter mjölk och ett bröd" -> items on the list. */
@@ -488,6 +532,38 @@ export class WillysApp {
     } else if (c.cmd === "refresh") {
       await this.refreshDealsJob();
     }
+  }
+
+  // ------------------------------------------------- manual jobs
+
+  /** Run a scheduled job on demand: deals | predict | compose. */
+  async runJob(job: string): Promise<void> {
+    if (job === "deals") {
+      await this.refreshDealsJob();
+    } else if (job === "predict") {
+      await this.runPredictorCycle();
+    } else if (job === "compose") {
+      await this.composeNow(true);
+    } else {
+      throw new Error(`unknown job: ${job}`);
+    }
+  }
+
+  // ------------------------------------------------- store switching
+
+  getEffectiveStoreId(): string {
+    return this.storage.data.storeOverride || this.cfg.storeId || this.session.currentStoreId || "";
+  }
+
+  /** Switch store for the session and persist the choice. */
+  async setStore(storeId: string): Promise<void> {
+    await this.session.ensureLoggedIn();
+    await this.session.selectStore(storeId);
+    this.storage.update((s) => {
+      s.storeOverride = storeId;
+    });
+    LOG.info(`store set to ${storeId}`);
+    await this.refreshDealsJob();
   }
 
   // ------------------------------------------------- shopping list target

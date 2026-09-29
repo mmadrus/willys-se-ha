@@ -116,7 +116,7 @@ export function DealsTab({ state, reload, notify }: { state: AppStateData; reloa
   return (
     <div className="flex flex-col gap-2">
       <Card className="py-3">
-        <div className="flex flex-wrap items-center gap-2 px-1">
+        <div className="flex flex-wrap items-centergap-2">
           <Input
             type="search"
             placeholder="Filtrera reor …"
@@ -136,7 +136,7 @@ export function DealsTab({ state, reload, notify }: { state: AppStateData; reloa
             </SelectContent>
           </Select>
         </div>
-        <div className="flex flex-wrap items-center gap-3 mt-2 px-1">
+        <div className="flex flex-wrap items-centergap-3 mt-2">
           <Select value={aisleFilter} onValueChange={setAisleFilter}>
             <SelectTrigger className="w-52">
               <SelectValue />

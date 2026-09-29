@@ -84,6 +84,7 @@ export interface AppStateData {
   items: ItemEntry[];
   staples: StapleEntry[];
   watchlist: string[];
+  list: TodoItem[];
   suggestions: Suggestion[];
   deals: DealItem[];
   dealsUpdated: number | null;
@@ -131,16 +132,22 @@ export interface AiProviderInfo {
   defaultModel: string;
 }
 
-export interface AiConfigInfo {
-  configured: boolean;
+export interface AiConnectorInfo {
+  id: string;
   provider: AiProviderId;
-  providers: AiProviderInfo[];
   baseUrl: string;
   model: string;
   apiKeyHint: string;
 }
 
+export interface AiConfigInfo {
+  configured: boolean;
+  providers: AiProviderInfo[];
+  connectors: AiConnectorInfo[];
+}
+
 export interface AiConfigPatch {
+  id?: string;
   provider?: string;
   apiKey?: string;
   baseUrl?: string;

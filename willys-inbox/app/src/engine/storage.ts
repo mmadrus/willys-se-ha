@@ -53,6 +53,7 @@ export class Storage {
         basketAisleHints: raw.basketAisleHints ?? {},
         aiMatchCache: raw.aiMatchCache ?? {},
         todoEntityOverride: typeof raw.todoEntityOverride === "string" ? raw.todoEntityOverride : null,
+        storeOverride: typeof raw.storeOverride === "string" ? raw.storeOverride : null,
         dealComposeMode: raw.dealComposeMode === "add" ? "add" : "ask",
       });
     } catch (e) {

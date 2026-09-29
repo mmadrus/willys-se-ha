@@ -101,6 +101,8 @@ export interface AppState {
   aiMatchCache: Record<string, string>; // normalized todo name -> item key (LLM-verified)
   /** Panel-selected shopping list entity; wins over the todo_entity option. */
   todoEntityOverride: string | null;
+  /** Panel-selected Willys store; wins over the store_id option. */
+  storeOverride: string | null;
   /** "ask" (default): deal hits become suggestions. "add": straight onto the list. */
   dealComposeMode: "ask" | "add";
   firstRunAt: number | null;
@@ -122,6 +124,7 @@ export function emptyState(): AppState {
     lastAnnouncedDealCodes: [],
     aiMatchCache: {},
     todoEntityOverride: null,
+    storeOverride: null,
     dealComposeMode: "ask",
     firstRunAt: null,
   };

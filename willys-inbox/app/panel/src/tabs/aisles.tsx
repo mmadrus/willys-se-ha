@@ -35,7 +35,7 @@ export function AislesTab({ state, reload, notify }: { state: AppStateData; relo
   return (
     <div className="flex flex-col gap-2">
       <Card className="py-3">
-        <div className="flex flex-wrap items-center gap-2 px-1">
+        <div className="flex flex-wrap items-centergap-2">
           <p className="flex-1 text-sm text-muted-foreground min-w-48">
             Ordningen styr i vilken ordning varor läggs på inköpslistan.
           </p>
@@ -44,7 +44,7 @@ export function AislesTab({ state, reload, notify }: { state: AppStateData; relo
       </Card>
       {aisles.map((a, idx) => (
         <Card key={a.id} className="py-2.5">
-          <div className="flex items-center gap-2 px-1">
+          <div className="flex items-centergap-2">
             <span className="text-muted-foreground text-sm w-6">{idx + 1}.</span>
             <Input
               className="flex-1"

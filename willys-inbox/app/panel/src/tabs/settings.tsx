@@ -12,39 +12,63 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useTheme, THEME_DEFAULTS, WILLYS_RED } from "@/theme";
-import type { AppStateData, AiConfigInfo, AiConfigPatch, DebugInfo, StoreInfo, TodoEntityInfo } from "@/types";
+import type {
+  AppStateData,
+  AiConfigInfo,
+  AiConfigPatch,
+  AiProviderId,
+  DebugInfo,
+  StoreInfo,
+  TodoEntityInfo,
+} from "@/types";
 import type { Notify } from "@/hooks";
 
-export function SettingsTab({ state, reload, notify }: { state: AppStateData; reload: () => void; notify: Notify }) {
+export function SettingsTab({
+  state,
+  reload,
+  notify,
+}: {
+  state: AppStateData;
+  reload: () => void;
+  notify: Notify;
+}) {
   const [stores, setStores] = useState<StoreInfo[]>([]);
   const [storeFilter, setStoreFilter] = useState("");
   const [debug, setDebug] = useState<DebugInfo | null>(null);
   const [theme, setTheme] = useTheme();
   const [ai, setAi] = useState<AiConfigInfo | null>(null);
-  const [aiProvider, setAiProvider] = useState<AiConfigInfo["provider"] | "">("");
-  const [aiKey, setAiKey] = useState("");
-  const [aiUrl, setAiUrl] = useState("");
-  const [aiModel, setAiModel] = useState("");
+  const [newProvider, setNewProvider] = useState<AiProviderId>("opencode");
+  const [newKey, setNewKey] = useState("");
+  const [newUrl, setNewUrl] = useState("");
+  const [newModel, setNewModel] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
+  const [testingId, setTestingId] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<string>("");
   const [todoEntities, setTodoEntities] = useState<{ entities: TodoEntityInfo[] } | null>(null);
   const [currentTodo, setCurrentTodo] = useState<{ current: string } | null>(null);
   const [selectedTodo, setSelectedTodo] = useState("");
   const [todoError, setTodoError] = useState("");
   const [dealMode, setDealMode] = useState<"ask" | "add">("ask");
+  const [selectedStore, setSelectedStore] = useState("");
+  const [confirmConnector, setConfirmConnector] = useState<string | null>(null);
 
   useMemo(() => {
     void api
       .stores()
       .then((d) => setStores(d.stores ?? []))
       .catch(() => undefined);
-    void api
-      .aiConfig()
-      .then((c) => {
-        setAi(c);
-        setAiProvider(c.provider);
-      })
-      .catch(() => undefined);
+    void api.aiConfig().then(setAi).catch(() => undefined);
     void api
       .todoEntities()
       .then((d) => {
@@ -55,8 +79,8 @@ export function SettingsTab({ state, reload, notify }: { state: AppStateData; re
     void api.panelSettings().then((d) => setDealMode(d.dealComposeMode)).catch(() => undefined);
   }, []);
 
-  const providerInfo = ai?.providers.find((p) => p.id === (aiProvider || ai?.provider));
-  const usingCustomUrl = aiProvider === "custom";
+  const newProviderInfo = ai?.providers.find((p) => p.id === newProvider);
+  const usingCustomUrl = newProvider === "custom";
   const filtered = stores.filter(
     (s) => !storeFilter || s.name.toLowerCase().includes(storeFilter.toLowerCase()),
   );
@@ -81,21 +105,29 @@ export function SettingsTab({ state, reload, notify }: { state: AppStateData; re
       .catch((e: Error) => notify(e.message));
   };
 
-  const saveAi = async (): Promise<void> => {
+  const runPredict = (): void => {
+    void api
+      .runJob("predict")
+      .then(() => {
+        notify("Prediktion körd – nya förslag kan ha skapats");
+        reload();
+      })
+      .catch((e: Error) => notify(e.message));
+  };
+
+  const addConnector = async (): Promise<void> => {
     setAiBusy(true);
     try {
-      const patch: AiConfigPatch = {};
-      if (aiProvider) patch.provider = aiProvider;
-      if (aiKey.trim()) patch.apiKey = aiKey.trim();
-      if (aiUrl.trim()) patch.baseUrl = aiUrl.trim();
-      if (aiModel.trim()) patch.model = aiModel.trim();
-      const cfg = await api.saveAiConfig(patch);
+      const patch: AiConfigPatch = { provider: newProvider };
+      if (newKey.trim()) patch.apiKey = newKey.trim();
+      if (newUrl.trim()) patch.baseUrl = newUrl.trim();
+      if (newModel.trim()) patch.model = newModel.trim();
+      const cfg = await api.saveAiConnector(patch);
       setAi(cfg);
-      setAiProvider(cfg.provider);
-      setAiKey("");
-      setAiUrl("");
-      setAiModel("");
-      notify("AI-inställningar sparade");
+      setNewKey("");
+      setNewUrl("");
+      setNewModel("");
+      notify("AI-anslutning tillagd");
     } catch (e) {
       notify(`Fel: ${(e as Error).message}`);
     } finally {
@@ -103,13 +135,34 @@ export function SettingsTab({ state, reload, notify }: { state: AppStateData; re
     }
   };
 
-  const testAi = (): void => {
-    setAiBusy(true);
+  const removeConnector = (id: string): void => {
     void api
-      .aiTest()
-      .then((r) => notify(r.ok ? `AI OK (${r.model}, ${r.latencyMs} ms)` : `AI-fel: ${r.error}`))
-      .catch((e: Error) => notify(`Fel: ${e.message}`))
-      .finally(() => setAiBusy(false));
+      .deleteAiConnector(id)
+      .then((cfg) => {
+        setAi(cfg);
+        notify("AI-anslutning borttagen");
+      })
+      .catch((e: Error) => notify(e.message));
+  };
+
+  const moveConnector = (id: string, dir: -1 | 1): void => {
+    if (!ai) return;
+    const ids = ai.connectors.map((c) => c.id);
+    const i = ids.indexOf(id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    void api.reorderAiConnectors(ids).then(setAi);
+  };
+
+  const testConnector = (id: string): void => {
+    setTestingId(id);
+    setTestResult("");
+    void api
+      .testAiConnector(id)
+      .then((r) => setTestResult(r.ok ? `OK: ${r.model} (${r.latencyMs} ms)` : `Fel: ${r.error}`))
+      .catch((e: Error) => setTestResult(`Fel: ${e.message}`))
+      .finally(() => setTestingId(null));
   };
 
   const saveTodo = async (): Promise<void> => {
@@ -126,17 +179,25 @@ export function SettingsTab({ state, reload, notify }: { state: AppStateData; re
     }
   };
 
-  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
-    <Card className="py-3 gap-2">
-      <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">{title}</h2>
-      {children}
-    </Card>
-  );
+  const applyStore = (): void => {
+    if (!selectedStore) return;
+    void api
+      .setStore(selectedStore)
+      .then((d) => {
+        notify(`Butik: ${d.storeId}`);
+        reload();
+      })
+      .catch((e: Error) => notify(e.message));
+  };
+
+  const providerLabel = (id: string): string =>
+    ai?.providers.find((p) => p.id === id)?.label ?? id;
 
   return (
     <div className="flex flex-col gap-2">
-      <Section title="Utseende">
-        <div className="flex flex-wrap items-center gap-3 px-1">
+      <Card className="py-3">
+        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Utseende</h2>
+        <div className="flex flex-wrap items-center gap-3 mt-1">
           <Button
             variant={theme.mode === "light" ? "default" : "outline"}
             onClick={() => setTheme({ ...theme, mode: "light" })}
@@ -171,24 +232,66 @@ export function SettingsTab({ state, reload, notify }: { state: AppStateData; re
             Återställ
           </Button>
         </div>
-        <p className="text-muted-foreground text-sm px-1">
+        <p className="text-muted-foreground text-sm">
           Standard: Willys-röd ({WILLYS_RED}) på vitt. Valen sparas i webbläsaren.
         </p>
-      </Section>
+      </Card>
 
-      <Section title="AI-assistent">
-        <p className="text-muted-foreground text-sm px-1">
-          {ai?.configured ? (
-            <>
-              Aktiv: <b>{ai.model}</b> via {ai.baseUrl} (nyckel {ai.apiKeyHint})
-            </>
-          ) : (
-            "Inte konfigurerad. Används för: smart matchning av incheckade varor och naturligt språk-lägg-till."
-          )}
+      <Card className="py-3">
+        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">AI-assistenter</h2>
+        <p className="text-muted-foreground text-sm">
+          {ai?.configured
+            ? "Anslutningarna används i tur och ordning uppifrån och ner – misslyckas en tas nästa automatiskt."
+            : "Ingen anslutning konfigurerad. Används för: smart matchning av incheckade varor och naturligt språk-lägg-till."}
         </p>
-        <div className="flex flex-wrap items-center gap-2 px-1">
-          <span className="text-sm text-muted-foreground">Leverantör:</span>
-          <Select value={aiProvider || ai?.provider || "opencode"} onValueChange={(v) => setAiProvider(v as AiConfigInfo["provider"])}>
+
+        {ai && ai.connectors.length > 0 && (
+          <div className="flex flex-col gap-1.5 mt-1">
+            {ai.connectors.map((c, idx) => (
+              <div key={c.id} className="flex flex-wrap items-center gap-2 rounded-md border border-border p-2">
+                <span className="text-xs text-muted-foreground w-5">{idx + 1}.</span>
+                <div className="flex-1 min-w-40">
+                  <span className="text-sm font-medium">{providerLabel(c.provider)}</span>
+                  <div className="text-xs text-muted-foreground">
+                    {c.model} · {c.baseUrl}
+                    {c.apiKeyHint && ` · nyckel ${c.apiKeyHint}`}
+                  </div>
+                </div>
+                <Button size="sm" variant="outline" disabled={testingId === c.id} onClick={() => testConnector(c.id)}>
+                  {testingId === c.id ? "…" : "Testa"}
+                </Button>
+                <div className="flex gap-1">
+                  <Button size="sm" variant="outline" disabled={idx === 0} onClick={() => moveConnector(c.id, -1)}>
+                    ↑
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={idx === ai.connectors.length - 1}
+                    onClick={() => moveConnector(c.id, 1)}
+                  >
+                    ↓
+                  </Button>
+                  <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setConfirmConnector(c.id)}>
+                    Ta bort
+                  </Button>
+                </div>
+                {testResult && testingId === null && testResult.startsWith("Fel") && (
+                  <span className="hidden" />
+                )}
+              </div>
+            ))}
+            {testResult && (
+              <p className={`text-sm px-2 ${testResult.startsWith("OK") ? "text-muted-foreground" : "text-primary"}`}>
+                {testResult}
+              </p>
+            )}
+          </div>
+        )}
+
+        <h3 className="text-sm font-semibold mt-2">Lägg till anslutning</h3>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={newProvider} onValueChange={(v) => setNewProvider(v as AiProviderId)}>
             <SelectTrigger className="w-56">
               <SelectValue />
             </SelectTrigger>
@@ -200,47 +303,41 @@ export function SettingsTab({ state, reload, notify }: { state: AppStateData; re
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 px-1">
           <Input
             type="password"
             placeholder="API-nyckel"
             className="flex-1 min-w-44"
-            value={aiKey}
-            onChange={(e) => setAiKey(e.target.value)}
+            value={newKey}
+            onChange={(e) => setNewKey(e.target.value)}
           />
           {usingCustomUrl && (
             <Input
               placeholder="Bas-URL (t.ex. http://localhost:11434/v1)"
               className="flex-1 min-w-52"
-              value={aiUrl}
-              onChange={(e) => setAiUrl(e.target.value)}
+              value={newUrl}
+              onChange={(e) => setNewUrl(e.target.value)}
             />
           )}
           <Input
-            placeholder={providerInfo?.defaultModel || ai?.model || "modell-id"}
+            placeholder={newProviderInfo?.defaultModel || "modell-id"}
             className="w-52"
-            value={aiModel}
-            onChange={(e) => setAiModel(e.target.value)}
+            value={newModel}
+            onChange={(e) => setNewModel(e.target.value)}
           />
+          <Button disabled={aiBusy} onClick={() => void addConnector()}>
+            Lägg till
+          </Button>
         </div>
-        <p className="text-muted-foreground text-xs px-1">
-          {providerInfo && !usingCustomUrl
-            ? `Förval: ${providerInfo.baseUrl} · modell ${providerInfo.defaultModel}. Fält du lämnar tomma använder förvalen.`
+        <p className="text-muted-foreground text-xs">
+          {newProviderInfo && !usingCustomUrl
+            ? `Förval: ${newProviderInfo.baseUrl} · modell ${newProviderInfo.defaultModel}. Fält du lämnar tomma använder förvalen.`
             : "Ange bas-URL till en OpenAI-kompatibel server (…/v1) och modell-id."}
         </p>
-        <div className="flex flex-wrap gap-1.5 px-1">
-          <Button disabled={aiBusy} onClick={() => void saveAi()}>
-            Spara
-          </Button>
-          <Button variant="secondary" disabled={aiBusy} onClick={() => void testAi()}>
-            Testa anslutning
-          </Button>
-        </div>
-      </Section>
+      </Card>
 
-      <Section title="Komponering">
-        <label className="flex items-center gap-2 px-1 cursor-pointer">
+      <Card className="py-3">
+        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Komponering</h2>
+        <label className="flex items-center gap-2 cursor-pointer">
           <Checkbox
             checked={dealMode === "add"}
             onCheckedChange={(v) => {
@@ -253,18 +350,19 @@ export function SettingsTab({ state, reload, notify }: { state: AppStateData; re
           />
           <span className="text-sm">Lägg rea-varor direkt på inköpslistan vid komponering</span>
         </label>
-        <p className="text-muted-foreground text-sm px-1">
+        <p className="text-muted-foreground text-sm">
           Av: rea-träffar från bevakningslistan kommer som förslag du godkänner. På: de hamnar direkt på listan (i gångordning).
         </p>
-      </Section>
+      </Card>
 
-      <Section title="Inköpslista">
-        <p className="text-muted-foreground text-sm px-1">
+      <Card className="py-3">
+        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Inköpslista</h2>
+        <p className="text-muted-foreground text-sm">
           Listan läggs i: <b>{currentTodo?.current ?? "todo.shopping_list"}</b>. Välj bland de to-do-listor som finns i din HA:
         </p>
         {todoEntities ? (
           <>
-            <div className="flex flex-wrap items-center gap-2 px-1">
+            <div className="flex flex-wrap items-center gap-2">
               <Select value={selectedTodo} onValueChange={setSelectedTodo}>
                 <SelectTrigger className="w-72">
                   <SelectValue placeholder="(välj lista)" />
@@ -279,16 +377,17 @@ export function SettingsTab({ state, reload, notify }: { state: AppStateData; re
               </Select>
               <Button onClick={() => void saveTodo()}>Spara lista</Button>
             </div>
-            {todoError && <p className="text-primary text-sm px-1">{todoError}</p>}
+            {todoError && <p className="text-primary text-sm">{todoError}</p>}
           </>
         ) : (
-          <p className="text-muted-foreground text-sm px-1 py-1">Kunde inte hämta to-do-listor.</p>
+          <p className="text-muted-foreground text-sm">Kunde inte hämta to-do-listor.</p>
         )}
-      </Section>
+      </Card>
 
-      <Section title="Butik">
-        <p className="text-muted-foreground text-sm px-1">
-          Aktiv butik: <b>{state.storeId || "hemmabutik från kontot"}</b>. Byt butik via add-ons inställningar med butikens ID:
+      <Card className="py-3">
+        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Butik</h2>
+        <p className="text-muted-foreground text-sm">
+          Aktiv butik: <b>{state.storeId || "hemmabutik från kontot"}</b>. Byt butik direkt här:
         </p>
         <Input
           type="search"
@@ -298,32 +397,55 @@ export function SettingsTab({ state, reload, notify }: { state: AppStateData; re
         />
         <div className="max-h-72 overflow-y-auto flex flex-col gap-2">
           {filtered.map((s) => (
-            <Card key={s.id} className="py-2.5">
-              <div className="flex flex-wrap items-center gap-2 px-1">
-                <div className="flex-1">
+            <Card key={s.id} className="py-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex-1 min-w-40">
                   <span className="font-semibold text-sm">{s.name}</span>
                   <div className="text-muted-foreground text-sm">
                     {s.address ?? ""} {s.city ?? ""}
                   </div>
                 </div>
                 <span className="text-xs bg-secondary text-secondary-foreground rounded-md px-2 py-0.5">ID {s.id}</span>
+                <Button
+                  size="sm"
+                  variant={state.storeId === s.id ? "default" : "outline"}
+                  onClick={() => {
+                    setSelectedStore(s.id);
+                    void api
+                      .setStore(s.id)
+                      .then((d) => {
+                        notify(`Butik: ${s.name}`);
+                        reload();
+                      })
+                      .catch((e: Error) => notify(e.message));
+                  }}
+                >
+                  {state.storeId === s.id ? "✓ Aktiv" : "Använd"}
+                </Button>
               </div>
             </Card>
           ))}
         </div>
-      </Section>
+        {selectedStore && <p className="hidden">{selectedStore}</p>}
+      </Card>
 
-      <Section title="Underhåll">
-        <div className="flex flex-wrap gap-1.5 px-1">
+      <Card className="py-3">
+        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Underhåll</h2>
+        <p className="text-muted-foreground text-sm">Kör de schemalagda jobben när du vill:</p>
+        <div className="flex flex-wrap gap-1.5">
           <Button variant="secondary" onClick={refreshDeals}>
-            Uppdatera reor nu
+            Uppdatera reor
+          </Button>
+          <Button variant="secondary" onClick={runPredict}>
+            Kör prediktion nu
           </Button>
           <Button onClick={compose}>Komponera lista nu</Button>
         </div>
-      </Section>
+      </Card>
 
-      <Section title="Diagnostik">
-        <div className="flex flex-wrap items-center gap-2 px-1">
+      <Card className="py-3">
+        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Diagnostik</h2>
+        <div className="flex flex-wrap items-center gap-2">
           <p className="flex-1 text-sm text-muted-foreground min-w-48">
             Visar API-behörigheter och miljövariabler (värden visas aldrig).
           </p>
@@ -335,9 +457,32 @@ export function SettingsTab({ state, reload, notify }: { state: AppStateData; re
           </Button>
         </div>
         {debug && (
-          <pre className="overflow-x-auto bg-secondary rounded-md p-2.5 mx-1 text-xs">{JSON.stringify(debug, null, 2)}</pre>
+          <pre className="overflow-x-auto bg-secondary rounded-md p-2.5 text-xs">{JSON.stringify(debug, null, 2)}</pre>
         )}
-      </Section>
+      </Card>
+
+      <AlertDialog open={confirmConnector !== null} onOpenChange={(o) => !o && setConfirmConnector(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ta bort AI-anslutning?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Anslutningen tas bort ur kedjan. Du kan lägga till den igen senare.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={() => {
+                if (confirmConnector) removeConnector(confirmConnector);
+                setConfirmConnector(null);
+              }}
+            >
+              Ta bort
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -211,6 +211,7 @@ route("GET", "/api/state", async (_req, res) => {
     items: Object.values(s.items),
     staples: Object.values(s.staples),
     watchlist: Object.keys(s.watchlist),
+    list: await app.shoppingList.getItems(app.todoEntity),
     suggestions: Object.values(s.suggestions)
       .filter((x) => x.status === "pending" || Date.now() - (x.decidedAt ?? 0) < 7 * 86_400_000)
       .sort((a, b) => b.createdAt - a.createdAt)
@@ -222,7 +223,7 @@ route("GET", "/api/state", async (_req, res) => {
       .map((d) => ({ ...d, aisle: guessAisle(d.name) })),
     dealsUpdated: s.dealCache?.fetchedAt ?? null,
     lastComposeAt: s.lastComposeAt,
-    storeId: app.session.currentStoreId,
+    storeId: app.getEffectiveStoreId(),
     aiConfigured: aiConfigured(app.ai),
     predictions: Object.values(s.stats)
       .map((st) => {
@@ -450,7 +451,8 @@ route("GET", "/api/ai/config", async (_req, res) => {
 
 route("POST", "/api/ai/config", async (req, res) => {
   const b = await body(req);
-  currentApp.setAiConfig({
+  currentApp.upsertAiConnector({
+    id: typeof b.id === "string" && b.id ? b.id : undefined,
     provider: typeof b.provider === "string" ? b.provider : undefined,
     apiKey: typeof b.apiKey === "string" ? b.apiKey : undefined,
     baseUrl: typeof b.baseUrl === "string" ? b.baseUrl : undefined,
@@ -459,8 +461,21 @@ route("POST", "/api/ai/config", async (req, res) => {
   ok(res, currentApp.getAiConfig());
 });
 
-route("POST", "/api/ai/test", async (_req, res) => {
-  ok(res, await currentApp.aiTest());
+route("DELETE", "/api/ai/config/:id", async (req, res) => {
+  currentApp.removeAiConnector(params(req)[0]);
+  ok(res, currentApp.getAiConfig());
+});
+
+route("POST", "/api/ai/config/reorder", async (req, res) => {
+  const b = await body(req);
+  const ids = Array.isArray(b.ids) ? b.ids.map(String) : [];
+  if (!ids.length) return json(res, 400, { error: "ids[] required" });
+  currentApp.reorderAiConnectors(ids);
+  ok(res, currentApp.getAiConfig());
+});
+
+route("POST", "/api/ai/test/:id", async (req, res) => {
+  ok(res, await currentApp.testAiConnector(params(req)[0]));
 });
 
 route("POST", "/api/ai/add", async (req, res) => {
@@ -472,5 +487,30 @@ route("POST", "/api/ai/add", async (req, res) => {
     ok(res, { added });
   } catch (e) {
     json(res, 502, { error: e instanceof Error ? e.message : "ai add failed" });
+  }
+});
+
+// ------------------------------------------------------ store + jobs
+
+route("POST", "/api/store", async (req, res) => {
+  const b = await body(req);
+  const storeId = String(b.storeId ?? "").trim();
+  if (!/^\d+$/.test(storeId)) return json(res, 400, { error: "storeId must be numeric" });
+  try {
+    await currentApp.setStore(storeId);
+    ok(res, { storeId: currentApp.getEffectiveStoreId() });
+  } catch (e) {
+    json(res, 502, { error: e instanceof Error ? e.message : "store switch failed" });
+  }
+});
+
+route("POST", "/api/jobs/run", async (req, res) => {
+  const b = await body(req);
+  const job = String(b.job ?? "");
+  try {
+    await currentApp.runJob(job);
+    ok(res, { ran: job });
+  } catch (e) {
+    json(res, 400, { error: e instanceof Error ? e.message : "job failed" });
   }
 });

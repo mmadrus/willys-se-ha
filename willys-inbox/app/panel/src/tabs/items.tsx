@@ -45,7 +45,7 @@ export function ItemsTab({ state, reload, notify }: { state: AppStateData; reloa
         const aisle = aisles.find((a) => a.id === i.aisle);
         return (
           <Card key={i.key} className="py-3">
-            <div className="flex flex-wrap items-center gap-2 px-1">
+            <div className="flex flex-wrap items-centergap-2">
               <div className="flex-1 min-w-40">
                 <span className="font-semibold text-sm">{i.name}</span>
                 <div className="text-muted-foreground text-sm">
@@ -80,7 +80,7 @@ export function ItemsTab({ state, reload, notify }: { state: AppStateData; reloa
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex flex-wrap gap-1.5 mt-2 px-1">
+            <div className="flex flex-wrapgap-1.5 mt-2">
               <Button
                 size="sm"
                 variant={stapleKeys.has(i.key) ? "default" : "outline"}
