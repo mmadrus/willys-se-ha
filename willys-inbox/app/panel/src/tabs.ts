@@ -546,6 +546,7 @@ export function SettingsTab({ state, reload, notify }: TabProps): JSX.Element {
   const [currentTodo, setCurrentTodo] = useState<{ current: string } | null>(null);
   const [selectedTodo, setSelectedTodo] = useState("");
   const [todoError, setTodoError] = useState("");
+  const [dealMode, setDealMode] = useState<"ask" | "add">("ask");
 
   useMemo(() => {
     api
@@ -566,6 +567,7 @@ export function SettingsTab({ state, reload, notify }: TabProps): JSX.Element {
         setCurrentTodo(d);
       })
       .catch(() => setTodoEntities(null));
+    api.panelSettings().then((d) => setDealMode(d.dealComposeMode)).catch(() => undefined);
   }, []);
 
   const saveTodo = async (): Promise<void> => {
@@ -691,6 +693,26 @@ export function SettingsTab({ state, reload, notify }: TabProps): JSX.Element {
       <div class="sug-actions">
         <button class="btn primary" disabled=${aiBusy} onClick=${() => void saveAi()}>Spara</button>
         <button class="btn" disabled=${aiBusy} onClick=${() => void testAi()}>Testa anslutning</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Komponering</h2>
+      <div class="row">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer">
+          <input type="checkbox" checked=${dealMode === "add"}
+                 onChange=${(e: Event) => {
+                   const mode = (e.target as HTMLInputElement).checked ? "add" : "ask";
+                   setDealMode(mode);
+                   void api.setPanelSettings({ dealComposeMode: mode }).then(() =>
+                     notify(mode === "add" ? "Reor läggs direkt på listan" : "Reor kommer som förslag"),
+                   );
+                 }} />
+          <span>Lägg rea-varor direkt på inköpslistan vid komponering</span>
+        </label>
+      </div>
+      <div class="muted" style="margin-top:6px">
+        Av: rea-träffar från bevakningslistan kommer som förslag du godkänner. På: de hamnar direkt på listan (i gångordning).
       </div>
     </div>
 

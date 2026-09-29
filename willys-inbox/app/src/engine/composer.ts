@@ -14,6 +14,8 @@ export interface ComposeOptions {
   autoConfidence: number;
   notificationLeadDays: number;
   includeDeals: boolean;
+  /** "ask" (default): deal hits become suggestions; "add": straight onto the list */
+  dealMode?: "ask" | "add";
   nowMs?: number;
 }
 
@@ -160,10 +162,14 @@ export function composeRun(
         percentOff: entry.percentOff,
       };
       dealHits.push(hit);
-      suggestions.push(makeSuggestion(item, "deal", 0.6, {
-        dealPercentOff: entry.percentOff,
-        dealPrice: entry.price,
-      }, now));
+      if (opts.dealMode === "add") {
+        listEntries.push(hit);
+      } else {
+        suggestions.push(makeSuggestion(item, "deal", 0.6, {
+          dealPercentOff: entry.percentOff,
+          dealPrice: entry.price,
+        }, now));
+      }
     }
   }
 

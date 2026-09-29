@@ -129,5 +129,29 @@ describe("composeRun", () => {
     const res = composeRun(s, [], opts);
     expect(res.dealHits).toHaveLength(1);
     expect(res.suggestions.some((x) => x.reason === "deal")).toBe(true);
+    expect(res.listEntries.some((e) => e.reason === "deal")).toBe(false);
+  });
+
+  it("puts deal hits on the list in dealMode add", () => {
+    const s = baseState();
+    s.watchlist["mjolk"] = { key: "mjolk" };
+    s.dealCache = {
+      fetchedAt: Date.now(),
+      storeId: "2110",
+      items: [{
+        code: "123_ST",
+        name: "Arla Mjölk 1l",
+        price: 9,
+        comparePrice: 14,
+        savings: 5,
+        percentOff: 35,
+        labels: [],
+        outOfStock: false,
+      }],
+    };
+    const res = composeRun(s, [], { ...opts, dealMode: "add" });
+    const dealEntry = res.listEntries.find((e) => e.reason === "deal");
+    expect(dealEntry?.key).toBe("mjolk");
+    expect(res.suggestions.some((x) => x.reason === "deal")).toBe(false);
   });
 });

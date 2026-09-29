@@ -93,4 +93,7 @@ export const api = {
     req<{ entities: import("./types").TodoEntityInfo[]; current: string }>("GET", "api/todo-entities"),
   setTodoEntity: (entityId: string) =>
     req<{ current: string }>("POST", "api/todo-entity", { entityId }),
+  panelSettings: () => req<{ dealComposeMode: "ask" | "add" }>("GET", "api/panel-settings"),
+  setPanelSettings: (patch: { dealComposeMode?: "ask" | "add" }) =>
+    req<{ dealComposeMode: "ask" | "add" }>("POST", "api/panel-settings", patch),
 };

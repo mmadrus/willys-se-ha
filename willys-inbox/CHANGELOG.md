@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.7
+
+- New Komponering setting: "Lägg rea-varor direkt på inköpslistan" -
+  when enabled, watchlist deal hits are composed straight onto the list
+  (in aisle order) instead of arriving as suggestions
+- Empty-compose guidance now points out deals that matched and the
+  new setting
+
 ## 0.2.6
 
 - Reor: sort by store walk order (Gångordning), Rabatt %, Sparar kr or

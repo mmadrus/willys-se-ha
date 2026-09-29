@@ -244,6 +244,7 @@ export class WillysApp {
       autoConfidence: this.cfg.autoAddConfidence,
       notificationLeadDays: this.cfg.notificationLeadDays,
       includeDeals,
+      dealMode: this.storage.data.dealComposeMode === "add" ? "add" : "ask",
     });
 
     if (result.listEntries.length) {
@@ -519,6 +520,17 @@ export class WillysApp {
       s.todoEntityOverride = clean ? clean : null;
     });
     LOG.info(`shopping list entity set to: ${this.todoEntity}`);
+  }
+
+  getDealComposeMode(): "ask" | "add" {
+    return this.storage.data.dealComposeMode === "add" ? "add" : "ask";
+  }
+
+  setDealComposeMode(mode: "ask" | "add"): void {
+    this.storage.update((s) => {
+      s.dealComposeMode = mode === "add" ? "add" : "ask";
+    });
+    LOG.info(`deal compose mode: ${mode}`);
   }
 
   /** Does the configured to-do entity exist in HA? */

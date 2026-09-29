@@ -430,6 +430,18 @@ route("POST", "/api/todo-entity", async (req, res) => {
   ok(res, { current: currentApp.todoEntity });
 });
 
+route("GET", "/api/panel-settings", async (_req, res) => {
+  ok(res, { dealComposeMode: currentApp.getDealComposeMode() });
+});
+
+route("POST", "/api/panel-settings", async (req, res) => {
+  const b = await body(req);
+  if (b.dealComposeMode === "add" || b.dealComposeMode === "ask") {
+    currentApp.setDealComposeMode(b.dealComposeMode);
+  }
+  ok(res, { dealComposeMode: currentApp.getDealComposeMode() });
+});
+
 // ------------------------------------------------------------------- ai
 
 route("GET", "/api/ai/config", async (_req, res) => {
